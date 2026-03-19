@@ -7,11 +7,13 @@ class MenuBarController {
     private var cancellables = Set<AnyCancellable>()
     private let appState: AppState
     private var settingsWindow: NSWindow?
+    private var overlayController: RecordingOverlayController?
 
     init(appState: AppState) {
         self.appState = appState
         setupStatusItem()
         observeState()
+        self.overlayController = RecordingOverlayController()
     }
 
     private func setupStatusItem() {
@@ -48,6 +50,10 @@ class MenuBarController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 self?.updateIcon(for: state)
+                switch state {
+                case .recording: self?.overlayController?.show()
+                default:         self?.overlayController?.hide()
+                }
             }
             .store(in: &cancellables)
     }

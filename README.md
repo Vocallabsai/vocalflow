@@ -32,6 +32,22 @@ Audio is streamed in real-time to [Deepgram](https://deepgram.com) for transcrip
 - [Groq API key](https://console.groq.com) (optional, for post-processing)
 - Xcode Command Line Tools or Xcode (to build from source)
 
+## Installation (Pre-built)
+
+Download the latest `VocalFlow.app.zip` from the [Releases](../../releases) page, unzip it, and move it to `/Applications`.
+
+Because VocalFlow is not notarized by Apple, macOS will block it on first launch with a *"cannot be opened because the developer cannot be verified"* warning. Run this one-time command to clear the quarantine flag:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/VocalFlow.app
+```
+
+Then open it normally. You will not need to run this again.
+
+> **Why is this needed?** macOS Gatekeeper flags apps downloaded from the internet that aren't signed with a paid Apple Developer certificate. The command above removes that flag — it does not disable any security globally.
+
+---
+
 ## Build & Run
 
 ```bash

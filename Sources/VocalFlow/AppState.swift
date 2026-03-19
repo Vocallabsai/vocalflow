@@ -101,6 +101,7 @@ class AppState: ObservableObject {
     let groqService: GroqService = GroqService()
     let textInjector: TextInjector = TextInjector()
     let keychainService: KeychainService = KeychainService()
+    let audioMuter: SystemAudioMuter = SystemAudioMuter()
 
     init() {
         self.deepgramService = DeepgramService()

@@ -34,13 +34,20 @@ class HotkeyManager {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.appState.recordingState = .recording
+            // Start WebSocket early so connection is ready by the time capture begins
             self.appState.deepgramService.connect(
                 apiKey: self.appState.deepgramAPIKey,
                 model: self.appState.selectedModel,
                 language: self.appState.selectedLanguage
             )
-            self.appState.audioEngine.startCapture { [weak self] buffer, format in
-                self?.appState.deepgramService.sendAudioBuffer(buffer, format: format)
+            // Play chime before muting so it isn't silenced
+            NSSound(named: .init("Tink"))?.play()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                guard let self else { return }
+                self.appState.audioMuter.mute()
+                self.appState.audioEngine.startCapture { [weak self] buffer, format in
+                    self?.appState.deepgramService.sendAudioBuffer(buffer, format: format)
+                }
             }
         }
     }
@@ -50,6 +57,9 @@ class HotkeyManager {
             guard let self else { return }
             self.appState.recordingState = .transcribing
             self.appState.audioEngine.stopCapture()
+            self.appState.audioMuter.unmute()
+            // Play chime after unmuting so it goes through
+            NSSound(named: .init("Tink"))?.play()
             self.appState.deepgramService.closeStream { [weak self] finalTranscript in
                 guard let self else { return }
                 guard !finalTranscript.isEmpty else {
