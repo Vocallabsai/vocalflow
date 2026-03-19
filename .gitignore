@@ -1,0 +1,26 @@
+# Build output
+.build/
+VocalFlow.app/
+WisprClone.app/
+
+# Installer output
+dist/
+
+# Xcode / Swift
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+*.o
+*.d
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+__MACOSX/
+
+# Secrets / keys (never commit)
+*.pem
+*.key
+*.p12
+*.mobileprovision
