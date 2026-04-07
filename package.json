@@ -1,0 +1,16 @@
+{
+  "name": "vocalflow-windows",
+  "version": "1.0.0",
+  "description": "Port of the macOS VocalFlow app to Windows using Electron",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "node-global-key-listener": "^0.1.0",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "electron": "^28.2.3"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "vocalflow-windows",
+  "version": "1.0.0",
+  "description": "VocalFlow for Windows — hold-to-dictate into any text field, powered by Deepgram + Groq",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "cross-env NODE_ENV=development electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "node-global-key-listener": "^0.3.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^29.0.0",
+    "electron-builder": "^24.13.0"
+  },
+  "build": {
+    "appId": "com.vocalflow.windows",
+    "productName": "VocalFlow",
+    "directories": { "output": "dist" },
+    "win": { "target": "nsis" },
+    "files": ["src/**/*", "config/**/*", "resources/**/*", "package.json"]
+  }
+}

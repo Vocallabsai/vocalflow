@@ -1,26 +1,6 @@
-# Build output
-.build/
-VocalFlow.app/
-WisprClone.app/
-
-# Installer output
+node_modules/
 dist/
-
-# Xcode / Swift
-*.xcodeproj/
-*.xcworkspace/
-DerivedData/
-*.o
-*.d
-
-# macOS
+.cache/
 .DS_Store
-.AppleDouble
-.LSOverride
-__MACOSX/
-
-# Secrets / keys (never commit)
-*.pem
-*.key
-*.p12
-*.mobileprovision
+Thumbs.db
+*.log

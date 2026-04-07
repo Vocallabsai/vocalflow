@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+dist-electron/
+build/
+release/
+*.log
+.DS_Store
+.vscode/

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VocalFlow Overlay</title>
+    <style>
+        body {
+            /* Clear margins and ensure full-window centering */
+            margin: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            /* Must be transparent to allow the Frameless transparent config in main to show through */
+            background: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            /* Allow user to drag the overly around just in case */
+            -webkit-app-region: drag;
+            user-select: none;
+        }
+
+        .pill {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            /* Requested background color */
+            background-color: rgba(15, 15, 20, 0.92);
+            padding: 12px 24px;
+            border-radius: 40px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            /* Backdrop filter for extra premium feel on supported OSes if desired */
+            backdrop-filter: blur(8px);
+        }
+
+        .pulse-ring {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            background-color: #ff453a; /* Deep, vivid red */
+            border-radius: 50%;
+            /* Bounding pulse box */
+            box-shadow: 0 0 8px rgba(255, 69, 58, 0.6);
+            animation: pulse-animation 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .text {
+            color: #ffffff;
+            font-size: 15px;
+            font-weight: 500;
+            letter-spacing: 0.4px;
+        }
+
+        @keyframes pulse-animation {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.4;
+                transform: scale(1.15);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="pill">
+        <div class="pulse-ring">
+            <div class="dot"></div>
+        </div>
+        <div class="text">Listening…</div>
+    </div>
+</body>
+</html>

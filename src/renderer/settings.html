@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VocalFlow Settings</title>
+    <!-- Modern Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f0f13;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f0f0f5;
+            --text-muted: #8e8e93;
+            --accent: #5e5ce6;
+            --accent-hover: #7d7aff;
+            --success: #32d74b;
+            --danger: #ff453a;
+            --surface: #1c1c1e;
+        }
+
+        body {
+            margin: 0;
+            padding: 32px;
+            background: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 32px;
+            animation: fadeInDown 0.6s ease;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin: 0;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fff, #9d9db5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header .emoji {
+            font-size: 32px;
+            filter: drop-shadow(0 0 10px rgba(255,255,255,0.2));
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            backdrop-filter: blur(12px);
+            transition: border-color 0.3s ease;
+            animation: slideUp 0.6s ease both;
+        }
+        
+        .card:hover { border-color: rgba(255,255,255,0.15); }
+        .card:nth-child(2) { animation-delay: 0.1s; }
+        .card:nth-child(3) { animation-delay: 0.2s; }
+        .card:nth-child(4) { animation-delay: 0.3s; }
+
+        .card h2 {
+            margin: 0 0 20px 0;
+            font-size: 18px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .row {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .row:last-child { margin-bottom: 0; }
+        
+        .input-group { flex: 1; min-width: 200px; }
+
+        label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        input[type="text"], input[type="password"], select {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--card-border);
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text-main);
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+        }
+
+        input[type="text"]:focus, input[type="password"]:focus, select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(94, 92, 230, 0.2);
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border-radius: 10px;
+            border: none;
+            background: var(--accent);
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 28px;
+        }
+
+        .btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+        .btn:active { transform: translateY(1px); }
+        
+        .btn-icon-text {
+            background: var(--surface);
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            margin-top: 0;
+            padding: 8px 12px;
+        }
+
+        .btn-icon-text:hover { background: rgba(255,255,255,0.05); }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin: 0;
+            cursor: pointer;
+            color: var(--text-main);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--card-border);
+        }
+
+        .status-text { font-size: 14px; font-weight: 600; }
+        .text-green { color: var(--success); }
+        .text-red { color: var(--danger); }
+        .text-muted { color: var(--text-muted); }
+
+        .actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 36px;
+            animation: slideUp 0.8s ease;
+        }
+
+        .btn-danger {
+            background: rgba(255, 69, 58, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(255, 69, 58, 0.2);
+            margin-top: 0;
+        }
+
+        .btn-danger:hover { background: rgba(255, 69, 58, 0.2); }
+        .btn-primary { margin-top: 0; }
+
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="emoji">🎙️</div>
+        <h1>VocalFlow</h1>
+    </div>
+
+    <!-- HOTKEY CONFIGURATION -->
+    <div class="card">
+        <h2>Hotkey Configuration</h2>
+        <div class="row" style="margin-bottom: 0;">
+            <div class="input-group">
+                <label>Push-to-Talk Key</label>
+                <select id="hotkey">
+                    <option value="RIGHT ALT">Right Alt</option>
+                    <option value="LEFT ALT">Left Alt</option>
+                    <option value="RIGHT CTRL">Right Ctrl</option>
+                    <option value="LEFT CTRL">Left Ctrl</option>
+                    <option value="RIGHT SHIFT">Right Shift</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- DEEPGRAM CONFIGURATION -->
+    <div class="card">
+        <h2>Deepgram (Transcription)</h2>
+        <div class="row">
+            <div class="input-group">
+                <label>API Key</label>
+                <input type="password" id="deepgram-key" placeholder="sk-...">
+            </div>
+            <button class="btn" id="deepgram-save-key">Save</button>
+        </div>
+        <div class="row">
+            <div class="input-group">
+                <label>Model</label>
+                <select id="deepgram-model">
+                    <option value="nova-3">nova-3</option>
+                </select>
+            </div>
+            <button class="btn btn-icon-text" id="deepgram-fetch-models" style="margin-top: 28px;">Fetch Models</button>
+        </div>
+        <div class="row">
+            <div class="input-group">
+                <label>Language (e.g. en, es, hi)</label>
+                <input type="text" id="deepgram-language" placeholder="en">
+            </div>
+        </div>
+        <div class="status-row">
+            <button class="btn btn-icon-text" id="deepgram-refresh" style="margin-top:0">↻</button>
+            <span style="color:var(--text-muted); font-size: 14px;">Balance:</span>
+            <span id="deepgram-balance-label" class="status-text text-muted">Awaiting check...</span>
+        </div>
+    </div>
+
+    <!-- GROQ CONFIGURATION -->
+    <div class="card">
+        <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 20px;">
+            <h2 style="margin:0;">Groq (Text Processing)</h2>
+            <div class="checkbox-group" style="margin:0;">
+                <input type="checkbox" id="groq-enable">
+                <label for="groq-enable">Enable</label>
+            </div>
+        </div>
+        
+        <div id="groq-settings-container" style="transition: opacity 0.3s ease;">
+            <div class="row">
+                <div class="input-group">
+                    <label>API Key</label>
+                    <input type="password" id="groq-key" placeholder="gsk_...">
+                </div>
+                <button class="btn" id="groq-save-key">Save</button>
+            </div>
+            <div class="row">
+                <div class="input-group">
+                    <label>Model</label>
+                    <select id="groq-model">
+                        <option value="llama3-8b-8192">llama3-8b-8192</option>
+                    </select>
+                </div>
+                <button class="btn btn-icon-text" id="groq-fetch-models" style="margin-top: 28px;">Fetch Models</button>
+            </div>
+
+            <!-- Processing Directives -->
+            <div style="margin-bottom: 20px;">
+                <label style="margin-bottom: 12px; font-size: 15px; color:white;">Text Optimizations</label>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="groq-spelling">
+                    <label for="groq-spelling">Spelling Correction</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="groq-grammar">
+                    <label for="groq-grammar">Grammar Correction</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="groq-transliteration">
+                    <label for="groq-transliteration">Transliteration (e.g. Romanized Hindi to English)</label>
+                </div>
+
+                <div id="transliteration-box" style="display:none; margin-left: 28px; margin-bottom: 16px; margin-top: 6px;">
+                    <label>Transliteration Pair</label>
+                    <select id="groq-transliteration-pair"></select>
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="groq-translation">
+                    <label for="groq-translation">Translation</label>
+                </div>
+
+                <div id="translation-box" style="display:none; margin-left: 28px; margin-top: 6px;">
+                    <label>Target Language</label>
+                    <input type="text" id="groq-translation-target" placeholder="e.g. English">
+                </div>
+            </div>
+
+            <div class="status-row">
+                <button class="btn btn-icon-text" id="groq-refresh" style="margin-top:0">↻</button>
+                <span style="color:var(--text-muted); font-size: 14px;">Status:</span>
+                <span id="groq-status-label" class="status-text text-muted">Awaiting check...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="actions">
+        <button class="btn btn-danger" id="quit-btn">Quit Setup</button>
+        <button class="btn btn-primary" id="save-all-btn">Save All Settings</button>
+    </div>
+
+    <!-- Connect settings Logic -->
+    <script src="./settings.js"></script>
+</body>
+</html>

@@ -1,119 +1,70 @@
-# VocalFlow
+# VocalFlow for Windows
 
-A lightweight macOS menu bar app that lets you dictate into any text field — anywhere on your Mac — using a hold-to-record hotkey.
+## Port of the macOS VocalFlow app to Windows using Electron
 
-Hold a key → speak → release → text appears at your cursor.
+VocalFlow is a lightning-fast, highly accurate workflow tool that instantly converts your speech into highly formatted, optimized text anywhere on your computer using global hotkeys.
 
-## How it works
+## Minimum Requirements
+- **OS**: Windows 10 or Windows 11
+- **Node**: Node.js 18+
+- **APIs**: 
+    - Deepgram API key (Required for ultra-fast, real-time transcription)
+    - Groq API key (Optional but highly recommended for fast grammar and styling)
 
-1. Hold the configured hotkey (e.g. Right Option)
-2. Speak
-3. Release — the transcript is injected at your cursor via simulated paste
+## Quick Start
+1. Clone the repository: `git clone <repository_url>`
+2. Navigate into the directory and install dependencies:
+    ```bash
+    cd vocalflow-windows
+    npm install
+    ```
+3. Set your initial keys by editing `config/config.js` or via the interactive UI later.
+4. Launch the application:
+    ```bash
+    npm start
+    ```
 
-Audio is streamed in real-time to [Deepgram](https://deepgram.com) for transcription. Optionally, the raw transcript is passed through [Groq](https://groq.com) for spelling correction, grammar correction, code-mix transliteration, or translation before injection.
+## Configuration & Usage
+VocalFlow maintains a fallback cascade for its configurations. The application initially reads hardcoded fallback values from `config/config.js`. 
+Once you interact with the tray application and change configurations within the **Settings UI** (Runtime), the dynamic settings are permanently stored into Windows local AppData:
+`%APPDATA%/VocalFlow/settings.json`
 
-## Features
-
-- **Hold-to-record hotkey** — configurable: Right Option, Left Option, Right/Left Command, or Fn
-- **Real-time streaming ASR** — powered by Deepgram's WebSocket API
-- **Post-processing via Groq LLM**
-  - Spelling correction
-  - Grammar correction
-  - Code-mix transliteration (Hinglish, Tanglish, Spanglish, and 13 more)
-  - Translation to any target language
-- **Works in any app** — text is injected via simulated Cmd+V
-- **Menu bar app** — no Dock icon, minimal footprint
-- **API keys stored in Keychain** — never written to disk in plaintext
-
-## Requirements
-
-- macOS 13 Ventura or later
-- [Deepgram API key](https://console.deepgram.com/signup) (free tier available)
-- [Groq API key](https://console.groq.com) (optional, for post-processing)
-- Xcode Command Line Tools or Xcode (to build from source)
-
-## Installation (Pre-built)
-
-Download the latest `VocalFlow.app.zip` from the [Releases](../../releases) page, unzip it, and move it to `/Applications`.
-
-Because VocalFlow is not notarized by Apple, macOS will block it on first launch with a *"cannot be opened because the developer cannot be verified"* warning. Run this one-time command to clear the quarantine flag:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/VocalFlow.app
-```
-
-Then open it normally. You will not need to run this again.
-
-> **Why is this needed?** macOS Gatekeeper flags apps downloaded from the internet that aren't signed with a paid Apple Developer certificate. The command above removes that flag — it does not disable any security globally.
-
----
-
-## Build & Run
-
-```bash
-# Build release .app bundle
-./build.sh
-
-# Launch
-open VocalFlow.app
-```
-
-After launch, grant permissions when prompted:
-- **Microphone** — for audio capture
-- **Accessibility** — for global hotkey detection and text injection
-
-> After every rebuild, you must re-grant Accessibility permission in
-> System Settings → Privacy & Security → Accessibility.
-
-### Run with logs (for development)
-
-```bash
-# Run the binary directly — stdout/stderr appear in the terminal
-./VocalFlow.app/Contents/MacOS/VocalFlow
-
-# Or build a debug binary and run via Swift
-swift run
-
-# Stream system logs for a running instance
-log stream --predicate 'process == "VocalFlow"' --level debug
-```
-
-## Setup
-
-1. Click the VocalFlow icon in the menu bar → **Settings**
-2. Paste your **Deepgram API key** and click **Save**, then **Fetch Models**
-3. Choose a model and language
-4. (Optional) Paste your **Groq API key**, fetch models, and enable any post-processing options
-5. Choose your preferred hotkey
-6. Start dictating
+### Balances & API Validation
+- **Deepgram**: Supports a functional public REST endpoint that securely evaluates your current account's dynamic real-time dollar balance.
+- **Groq**: Groq doesn't provide a public balance API endpoint yet. Our tool validates key validity by making a silent network pre-flight request over standard Chat Completion endpoints. Go to [console.groq.com](https://console.groq.com) to view specific rate limit details.
 
 ## Project Structure
-
 ```
-Sources/VocalFlow/
-├── main.swift              # Entry point
-├── AppDelegate.swift       # App lifecycle
-├── AppState.swift          # Shared state, settings persistence
-├── HotkeyManager.swift     # Global modifier-key monitor
-├── AudioEngine.swift       # Microphone capture (AVAudioEngine)
-├── DeepgramService.swift   # WebSocket streaming to Deepgram
-├── GroqService.swift       # LLM post-processing via Groq
-├── TextInjector.swift      # Clipboard-based text injection
-├── MenuBarController.swift # Menu bar icon and popover
-├── SettingsView.swift      # SwiftUI settings panel
-├── PermissionsManager.swift# Microphone & Accessibility permissions
-└── KeychainService.swift   # Secure API key storage
+vocalflow-windows/
+├── config/
+│   └── config.js              # Hardcoded default values
+├── src/
+│   ├── main/
+│   │   ├── main.js            # Electron Main Process 
+│   │   ├── settingsManager.js # File System config handlers
+│   │   ├── deepgramService.js # Deepgram WebSocket logic
+│   │   ├── groqService.js     # Groq REST API logic
+│   │   └── balanceService.js  # Service to poll balances
+│   └── renderer/
+│       ├── preload.js         # Secure bridge to Main Process
+│       ├── overlay.html       # The transparent Listening display UI
+│       ├── settings.html      # Premium Settings UI Interface
+│       └── settings.js        # Logic bound to Settings UI
+├── .gitignore
+├── package.json
+└── README.md
 ```
 
-## Contributing
+## Troubleshooting
+| Issue | Potential Solution |
+|--------|----------------------------|
+| App doesn't launch / crashes immediately | Ensure you are on Node.js 18+ and have run `npm install`. |
+| "Listening" overlay appears, but nothing types | Ensure you have placed a valid Deepgram token and have network access. |
+| Global Keybinding behaves erratically | Go to the System Tray, open Settings, and toggle to a different explicit keybinding like Right Alt. |
+| Text is not capitalizing / formatting | Ensure the Groq toggle is actively ENABLED in the Settings panel and a key is provided. |
 
-Pull requests are welcome. For significant changes, open an issue first to discuss what you'd like to change.
-
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Commit your changes
-4. Open a pull request
-
-## License
-
-[MIT](LICENSE)
+## Credits
+- **Vocallabsai/vocalflow**: Original macOS application design and architecture.
+- **Deepgram**: Underlying foundational model logic for real-time STT.
+- **Groq**: LPU Accelerated processing logic for stylistic changes.
+- **Electron**: Powering this desktop transition smoothly.
