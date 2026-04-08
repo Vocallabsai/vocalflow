@@ -1,0 +1,135 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  background: transparent;
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.glass-container {
+  width: 90%;
+  max-width: 450px;
+  background: rgba(18, 18, 24, 0.92);
+  backdrop-filter: blur(25px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+h1 {
+  font-size: 24px;
+  margin: 0;
+  color: #a29bfe;
+}
+
+p {
+  font-size: 14px;
+  color: #b2bec3;
+  margin-top: 5px;
+}
+
+section {
+  margin-bottom: 30px;
+}
+
+h2 {
+  font-size: 16px;
+  color: #ddd;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 5px;
+}
+
+.input-group, .select-group, .toggle-group {
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.input-group input, .select-group select {
+  flex-grow: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 8px;
+  border-radius: 5px;
+  font-size: 14px;
+  outline: none;
+}
+
+.select-group select option {
+  background-color: #1e1e26;
+  color: #fff;
+}
+
+.input-group button, button {
+  background: #6c5ce7;
+  color: #fff;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-left: 10px;
+  transition: background 0.3s ease;
+}
+
+button:hover {
+  background: #a29bfe;
+}
+
+.balance-info {
+  font-size: 12px;
+  color: #00b894;
+  margin-top: 5px;
+  margin-bottom: 10px;
+}
+
+label {
+  font-size: 14px;
+  color: #b2bec3;
+}
+
+.toggle-group input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.about {
+  text-align: center;
+  margin-top: 30px;
+  font-size: 12px;
+  color: #636e72;
+}
+
+/* Scrollbar styling */
+.glass-container::-webkit-scrollbar {
+  width: 5px;
+}
+
+.glass-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.glass-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+}
