@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>VocalFlow Settings</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <div class="glass-container">
+    <header>
+      <h1>VocalFlow</h1>
+      <p>Windows Configuration</p>
+    </header>
+
+    <div class="settings-content">
+      <section>
+        <h2>ASR API Key (Deepgram)</h2>
+        <div class="input-group">
+          <input type="password" id="deepgramApiKey" placeholder="Enter Deepgram API Key">
+          <button id="showDeepgramKey">Show</button>
+        </div>
+        <div id="deepgramBalance" class="balance-info">Balance: Fetching...</div>
+        <button id="saveDeepgram">Save & Fetch Models</button>
+      </section>
+
+      <section>
+        <h2>Groq API Key (Post-processing)</h2>
+        <div class="input-group">
+          <input type="password" id="groqApiKey" placeholder="Enter Groq API Key">
+          <button id="showGroqKey">Show</button>
+        </div>
+        <button id="saveGroq">Save & Fetch Models</button>
+      </section>
+
+      <section>
+        <h2>Deepgram Models</h2>
+        <div class="select-group">
+          <label>Model</label>
+          <select id="selectedModel"></select>
+        </div>
+        <div class="select-group">
+          <label>Language</label>
+          <select id="selectedLanguage"></select>
+        </div>
+      </section>
+
+      <section>
+        <h2>Corrections & Features</h2>
+        <div class="toggle-group">
+          <label>Spelling Correction</label>
+          <input type="checkbox" id="correctionModeEnabled">
+        </div>
+        <div class="toggle-group">
+          <label>Grammar Correction</label>
+          <input type="checkbox" id="grammarCorrectionEnabled">
+        </div>
+        <div class="toggle-group">
+          <label>Code-Mix Input</label>
+          <input type="checkbox" id="codeMixEnabled">
+        </div>
+        <div id="codeMixDropdown" class="select-group hidden">
+          <label>Language</label>
+          <select id="selectedCodeMix"></select>
+        </div>
+        <div class="toggle-group">
+          <label>Convert to Language</label>
+          <input type="checkbox" id="targetLanguageEnabled">
+        </div>
+        <div id="targetLanguageDropdown" class="select-group hidden">
+          <label>Target Language</label>
+          <select id="selectedTargetLanguage"></select>
+        </div>
+      </section>
+
+      <section>
+        <h2>Hotkey</h2>
+        <div class="select-group">
+          <label>Trigger Key</label>
+          <select id="selectedHotkey">
+            <option value="RIGHT ALT">Right Alt</option>
+            <option value="LEFT ALT">Left Alt</option>
+            <option value="RIGHT CTRL">Right Ctrl</option>
+            <option value="LEFT CTRL">Left Ctrl</option>
+            <option value="RIGHT SHIFT">Right Shift</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="about">
+        <p>Version 1.0.0</p>
+        <p>Hold the hotkey to record, release to transcribe.</p>
+      </section>
+    </div>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>

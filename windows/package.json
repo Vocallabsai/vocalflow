@@ -1,0 +1,23 @@
+{
+  "name": "vocalflow-windows",
+  "version": "1.0.0",
+  "description": "VocalFlow for Windows - Dictate into any text field",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "electron-builder",
+    "zip": "powershell -Command \"Compress-Archive -Path src, resources, package.json, config.json, README_WINDOWS.md -DestinationPath VocalFlow-Windows.zip -Force\""
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "node-fetch": "^2.6.7",
+    "node-global-key-listener": "^0.1.1",
+    "node-record-lpcm16": "^1.0.1",
+    "ws": "^8.13.0"
+  },
+  "devDependencies": {
+    "electron": "^25.0.0",
+    "electron-builder": "^24.4.0"
+  }
+}
