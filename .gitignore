@@ -1,25 +1,42 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.env
+
 # Build output
-.build/
-VocalFlow.app/
-WisprClone.app/
-
-# Installer output
 dist/
+build/
+.build/
+*.app/
+*.dmg/
+*.zip/
 
-# Xcode / Swift
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Git
+.gitignore
+.git/
+
+# Electron specific
+electron-data/
+
+# macOS / Swift (from original)
 *.xcodeproj/
 *.xcworkspace/
 DerivedData/
 *.o
 *.d
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
 __MACOSX/
 
-# Secrets / keys (never commit)
+# Secrets / keys
 *.pem
 *.key
 *.p12
