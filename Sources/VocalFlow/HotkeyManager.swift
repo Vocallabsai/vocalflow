@@ -2,8 +2,12 @@ import AppKit
 
 class HotkeyManager {
     private var flagsMonitor: Any?
+    private var escapeMonitor: Any?
     private let appState: AppState
     private var triggerKeyIsDown = false
+
+    /// Virtual key code for Esc (layout-independent).
+    private static let escapeKeyCode: UInt16 = 53
 
     init(appState: AppState) {
         self.appState = appState
@@ -12,6 +16,12 @@ class HotkeyManager {
     func startListening() {
         flagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
             self?.handleFlagsChanged(event)
+        }
+        // Esc anywhere in the system aborts an in-progress recording without
+        // running transcription or pasting anything into the focused app.
+        escapeMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+            guard event.keyCode == Self.escapeKeyCode else { return }
+            self?.cancelRecording()
         }
     }
 
@@ -41,70 +51,124 @@ class HotkeyManager {
                 language: self.appState.selectedLanguage
             )
             // Play chime before muting so it isn't silenced
-            NSSound(named: .init("Tink"))?.play()
+            self.playFeedbackSound()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                 guard let self else { return }
                 self.appState.audioMuter.mute()
-                self.appState.audioEngine.startCapture { [weak self] buffer, format in
-                    self?.appState.deepgramService.sendAudioBuffer(buffer, format: format)
+                do {
+                    try self.appState.audioEngine.startCapture(
+                        deviceUID: self.appState.selectedAudioDeviceUID
+                    ) { [weak self] buffer, format in
+                        self?.appState.deepgramService.sendAudioBuffer(buffer, format: format)
+                    }
+                } catch {
+                    self.handleCaptureFailure(error)
                 }
+            }
+        }
+    }
+
+    private func cancelRecording() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            // Only act while actively recording — ignore Esc during transcription
+            // or idle so we don't clobber a paste-in-flight or a normal Esc press.
+            guard case .recording = self.appState.recordingState else { return }
+            self.appState.audioEngine.stopCapture()
+            self.appState.audioMuter.unmute()
+            self.appState.deepgramService.cancel()
+            // Discard the in-flight press so the imminent hotkey-up doesn't try
+            // to "stop" a session we just aborted.
+            self.triggerKeyIsDown = false
+            self.appState.recordingState = .idle
+        }
+    }
+
+    private func handleCaptureFailure(_ error: Error) {
+        appState.audioMuter.unmute()
+        appState.deepgramService.cancel()
+        let message = "Microphone failed: \(error.localizedDescription)"
+        appState.recordingState = .error(message)
+        appState.reportError(message)
+        // Discard the in-flight press so the imminent key-up doesn't try to "stop"
+        // a session that never started.
+        triggerKeyIsDown = false
+        // Auto-clear the error icon after a few seconds.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            guard let self else { return }
+            if case .error = self.appState.recordingState {
+                self.appState.recordingState = .idle
             }
         }
     }
 
     private func stopRecordingAndTranscribe() {
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self else { return }
             self.appState.recordingState = .transcribing
             self.appState.audioEngine.stopCapture()
             self.appState.audioMuter.unmute()
             // Play chime after unmuting so it goes through
-            NSSound(named: .init("Tink"))?.play()
-            self.appState.deepgramService.closeStream { [weak self] finalTranscript in
-                guard let self else { return }
-                guard !finalTranscript.isEmpty else {
-                    DispatchQueue.main.async { self.appState.recordingState = .idle }
-                    return
-                }
+            self.playFeedbackSound()
 
-                let inject: (String) -> Void = { [weak self] text in
-                    DispatchQueue.main.async {
-                        guard let self else { return }
-                        self.appState.lastTranscript = text
-                        self.appState.textInjector.inject(text: text)
-                        self.appState.recordingState = .idle
-                    }
-                }
+            let finalTranscript = await self.appState.deepgramService.closeStream()
+            guard !finalTranscript.isEmpty else {
+                self.appState.recordingState = .idle
+                return
+            }
 
-                let hasGroqConfig = !self.appState.groqAPIKey.isEmpty
-                    && !self.appState.selectedGroqModel.isEmpty
+            let provider = self.appState.selectedLLMProvider
+            let apiKey = self.appState.currentLLMAPIKey
+            let model = self.appState.currentLLMModel
+            let hasLLMConfig = !apiKey.isEmpty && !model.isEmpty
 
-                let options = GroqProcessingOptions(
-                    codeMix: (self.appState.codeMixEnabled && !self.appState.selectedCodeMix.isEmpty)
-                        ? self.appState.selectedCodeMix : nil,
-                    fixSpelling: self.appState.correctionModeEnabled,
-                    fixGrammar: self.appState.grammarCorrectionEnabled,
-                    targetLanguage: (self.appState.targetLanguageEnabled && !self.appState.selectedTargetLanguage.isEmpty)
-                        ? self.appState.selectedTargetLanguage : nil
-                )
+            let options = LLMProcessingOptions(
+                codeMix: (self.appState.codeMixEnabled && !self.appState.selectedCodeMix.isEmpty)
+                    ? self.appState.selectedCodeMix : nil,
+                fixSpelling: self.appState.correctionModeEnabled,
+                fixGrammar: self.appState.grammarCorrectionEnabled,
+                targetLanguage: (self.appState.targetLanguageEnabled && !self.appState.selectedTargetLanguage.isEmpty)
+                    ? self.appState.selectedTargetLanguage : nil,
+                customPrompt: self.appState.customSystemPrompt
+            )
 
-                if hasGroqConfig && options.hasAnyStep {
-                    self.appState.groqService.processText(
+            var processed: String? = nil
+            if hasLLMConfig && options.hasAnyStep {
+                do {
+                    processed = try await self.appState.llmService.processText(
                         finalTranscript,
                         options: options,
-                        apiKey: self.appState.groqAPIKey,
-                        model: self.appState.selectedGroqModel,
-                        completion: inject
+                        provider: provider,
+                        apiKey: apiKey,
+                        model: model
                     )
-                } else {
-                    inject(finalTranscript)
+                } catch let error as APIError {
+                    // Fall back to raw transcript so the user doesn't lose their dictation.
+                    self.appState.reportError("\(provider.displayName): \(error.userMessage)")
+                } catch {
+                    self.appState.reportError("\(provider.displayName): \(error.localizedDescription)")
                 }
             }
+
+            let typed = processed ?? finalTranscript
+            self.appState.lastTranscript = typed
+            self.appState.recordTranscript(raw: finalTranscript, processed: processed)
+            self.appState.textInjector.inject(text: typed)
+            self.appState.recordingState = .idle
         }
+    }
+
+    private func playFeedbackSound() {
+        let name = appState.feedbackSoundName
+        guard !name.isEmpty else { return }
+        NSSound(named: NSSound.Name(name))?.play()
     }
 
     deinit {
         if let monitor = flagsMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        if let monitor = escapeMonitor {
             NSEvent.removeMonitor(monitor)
         }
     }

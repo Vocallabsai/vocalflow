@@ -1,11 +1,16 @@
 import AppKit
 import SwiftUI
+import Combine
 
 class RecordingOverlayController {
     private var panel: NSPanel?
+    private let appState: AppState
+    private var cancellables = Set<AnyCancellable>()
 
-    init() {
+    init(appState: AppState) {
+        self.appState = appState
         buildPanel()
+        observeLiveTranscript()
     }
 
     private func buildPanel() {
@@ -24,10 +29,22 @@ class RecordingOverlayController {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.ignoresMouseEvents = true
 
-        panel.contentView = NSHostingView(rootView: WaveformOverlayView())
+        panel.contentView = NSHostingView(rootView: WaveformOverlayView(appState: appState))
         panel.contentView?.wantsLayer = true
 
         self.panel = panel
+    }
+
+    private func observeLiveTranscript() {
+        // Resize and recenter the panel as the transcript grows or shrinks so the
+        // bubble stays centered at the bottom of the screen.
+        appState.$liveTranscript
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, let panel = self.panel, panel.isVisible else { return }
+                self.positionPanel()
+            }
+            .store(in: &cancellables)
     }
 
     private func positionPanel() {

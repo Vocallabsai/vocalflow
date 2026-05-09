@@ -11,9 +11,7 @@ class PermissionsManager {
                     message: "VocalFlow needs microphone access to record your speech.\n\nGo to System Settings → Privacy & Security → Microphone and enable VocalFlow.",
                     actionTitle: "Open System Settings",
                     action: {
-                        NSWorkspace.shared.open(
-                            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!
-                        )
+                        NSWorkspace.shared.open(SystemPrefsURL.microphone)
                     }
                 )
                 return
@@ -26,9 +24,7 @@ class PermissionsManager {
                         message: "VocalFlow needs Accessibility access to detect the hotkey and inject text.\n\nGo to System Settings → Privacy & Security → Accessibility and add VocalFlow.",
                         actionTitle: "Open System Settings",
                         action: {
-                            NSWorkspace.shared.open(
-                                URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-                            )
+                            NSWorkspace.shared.open(SystemPrefsURL.accessibility)
                         }
                     )
                     // Poll and proceed once granted
