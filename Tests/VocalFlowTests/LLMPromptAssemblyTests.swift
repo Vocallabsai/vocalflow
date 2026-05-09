@@ -22,6 +22,7 @@ final class LLMPromptAssemblyTests: XCTestCase {
         let expected = """
         Process the following text by applying these steps in order:
         1. Fix any spelling mistakes. Do not change meaning or structure.
+
         Return only the final processed text with no explanation.
         """
         XCTAssertEqual(LLMService.buildSystemPrompt(for: options), expected)
