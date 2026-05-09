@@ -10,6 +10,11 @@ let package = Package(
         .executableTarget(
             name: "VocalFlow",
             path: "Sources/VocalFlow"
+        ),
+        .testTarget(
+            name: "VocalFlowTests",
+            dependencies: ["VocalFlow"],
+            path: "Tests/VocalFlowTests"
         )
     ]
 )
