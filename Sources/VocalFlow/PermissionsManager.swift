@@ -21,7 +21,13 @@ class PermissionsManager {
                 guard axGranted else {
                     self?.showAlert(
                         title: "Accessibility Access Required",
-                        message: "VocalFlow needs Accessibility access to detect the hotkey and inject text.\n\nGo to System Settings → Privacy & Security → Accessibility and add VocalFlow.",
+                        message: """
+                        VocalFlow needs Accessibility access to detect the hotkey and inject text.
+
+                        Go to System Settings → Privacy & Security → Accessibility and enable VocalFlow.
+
+                        If VocalFlow is already in the list, remove it first (select it and press −), then re-add the current /Applications/VocalFlow.app — entries from previous builds become invalid after reinstalling, even though the toggle may still show on.
+                        """,
                         actionTitle: "Open System Settings",
                         action: {
                             NSWorkspace.shared.open(SystemPrefsURL.accessibility)

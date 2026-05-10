@@ -66,6 +66,14 @@ class MenuBarController {
 
         menu.addItem(.separator())
 
+        let resetItem = NSMenuItem(
+            title: "Reset Permissions...",
+            action: #selector(resetPermissions),
+            keyEquivalent: ""
+        )
+        resetItem.target = self
+        menu.addItem(resetItem)
+
         let quitItem = NSMenuItem(
             title: "Quit VocalFlow",
             action: #selector(NSApplication.terminate(_:)),
@@ -215,6 +223,32 @@ class MenuBarController {
 
     func showSettings() {
         openSettings()
+    }
+
+    @objc private func resetPermissions() {
+        let alert = NSAlert()
+        alert.messageText = "Reset VocalFlow Permissions?"
+        alert.informativeText = """
+        This clears Microphone and Accessibility grants for VocalFlow, then quits the app.
+
+        Use this when the hotkey or text injection stops working after reinstalling — old grants from previous builds become invalid even if the toggle in System Settings still shows on.
+
+        After quitting, re-launch VocalFlow and grant permissions again when prompted.
+        """
+        alert.addButton(withTitle: "Reset and Quit")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.vocalflow.app"
+        for service in ["Accessibility", "Microphone"] {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+            p.arguments = ["reset", service, bundleID]
+            try? p.run()
+            p.waitUntilExit()
+        }
+
+        NSApp.terminate(nil)
     }
 
     @objc private func openSettings() {
