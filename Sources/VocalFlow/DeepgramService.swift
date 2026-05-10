@@ -32,6 +32,16 @@ class DeepgramService: NSObject, URLSessionWebSocketDelegate {
     private var isWaitingForFinal = false
     private var timeoutWorkItem: DispatchWorkItem?
 
+    // Audio frames captured before the WebSocket finishes its handshake are
+    // buffered here and flushed in order once the socket opens. Without this
+    // the first ~100-300ms of speech is silently dropped on every recording.
+    private var pendingFrames: [Data] = []
+    private var isSocketOpen = false
+    private let bufferLock = NSLock()
+    /// Cap pre-connection buffer at ~10s of 16-kHz mono Int16 audio so a stuck
+    /// handshake can't grow it without bound.
+    private static let maxBufferedBytes = 16_000 * 2 * 10
+
     override init() {
         super.init()
         session = URLSession(
@@ -46,6 +56,10 @@ class DeepgramService: NSObject, URLSessionWebSocketDelegate {
         currentInterim = ""
         isWaitingForFinal = false
         finalTranscriptCallback = nil
+        bufferLock.lock()
+        pendingFrames.removeAll()
+        isSocketOpen = false
+        bufferLock.unlock()
         emitPartial()
 
         guard !apiKey.isEmpty else { return }
@@ -135,13 +149,27 @@ class DeepgramService: NSObject, URLSessionWebSocketDelegate {
     }
 
     func sendAudioBuffer(_ buffer: AVAudioPCMBuffer, format: AVAudioFormat) {
-        guard let task = webSocketTask, task.state == .running else { return }
+        guard let task = webSocketTask else { return }
         guard let channelData = buffer.int16ChannelData else { return }
 
         let frameCount = Int(buffer.frameLength)
         let data = Data(bytes: channelData[0], count: frameCount * MemoryLayout<Int16>.size)
 
-        task.send(.data(data)) { _ in }
+        bufferLock.lock()
+        let openNow = isSocketOpen
+        if !openNow {
+            // Drop oldest frames if a stuck handshake would push us over the cap.
+            var totalBytes = pendingFrames.reduce(0) { $0 + $1.count }
+            while totalBytes + data.count > Self.maxBufferedBytes && !pendingFrames.isEmpty {
+                totalBytes -= pendingFrames.removeFirst().count
+            }
+            pendingFrames.append(data)
+        }
+        bufferLock.unlock()
+
+        if openNow {
+            task.send(.data(data)) { _ in }
+        }
     }
 
     func closeStream() async -> String {
@@ -178,6 +206,10 @@ class DeepgramService: NSObject, URLSessionWebSocketDelegate {
         isWaitingForFinal = false
         accumulatedTranscript = ""
         currentInterim = ""
+        bufferLock.lock()
+        pendingFrames.removeAll()
+        isSocketOpen = false
+        bufferLock.unlock()
         disconnect()
     }
 
@@ -262,6 +294,31 @@ class DeepgramService: NSObject, URLSessionWebSocketDelegate {
 // MARK: - URLSessionWebSocketDelegate
 
 extension DeepgramService {
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didOpenWithProtocol protocolName: String?
+    ) {
+        bufferLock.lock()
+        // Guard against a stale delegate callback for a previous task that
+        // opened after we already cancelled and reconnected.
+        guard webSocketTask === self.webSocketTask else {
+            bufferLock.unlock()
+            return
+        }
+        let frames = pendingFrames
+        pendingFrames.removeAll()
+        isSocketOpen = true
+        bufferLock.unlock()
+
+        if !frames.isEmpty {
+            dgLogger.info("WebSocket opened — flushing \(frames.count) buffered audio frames")
+            for frame in frames {
+                webSocketTask.send(.data(frame)) { _ in }
+            }
+        }
+    }
+
     func urlSession(
         _ session: URLSession,
         webSocketTask: URLSessionWebSocketTask,

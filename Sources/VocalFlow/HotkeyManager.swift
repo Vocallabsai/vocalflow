@@ -44,26 +44,35 @@ class HotkeyManager {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.appState.recordingState = .recording
-            // Start WebSocket early so connection is ready by the time capture begins
+
+            // Connect WebSocket and start capture immediately. DeepgramService
+            // queues frames internally until the socket opens, so audio captured
+            // during the handshake isn't lost. Previously we delayed capture by
+            // 150ms (to let the chime finish before muting), which dropped the
+            // start of the user's speech.
             self.appState.deepgramService.connect(
                 apiKey: self.appState.deepgramAPIKey,
                 model: self.appState.selectedModel,
                 language: self.appState.selectedLanguage
             )
-            // Play chime before muting so it isn't silenced
+            do {
+                try self.appState.audioEngine.startCapture(
+                    deviceUID: self.appState.selectedAudioDeviceUID
+                ) { [weak self] buffer, format in
+                    self?.appState.deepgramService.sendAudioBuffer(buffer, format: format)
+                }
+            } catch {
+                self.handleCaptureFailure(error)
+                return
+            }
+
+            // Output-side feedback runs in parallel and doesn't gate capture.
+            // The chime is short enough that any pickup by the mic transcribes
+            // to nothing meaningful; the mute still waits so the chime isn't
+            // cut off mid-play.
             self.playFeedbackSound()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-                guard let self else { return }
-                self.appState.audioMuter.mute()
-                do {
-                    try self.appState.audioEngine.startCapture(
-                        deviceUID: self.appState.selectedAudioDeviceUID
-                    ) { [weak self] buffer, format in
-                        self?.appState.deepgramService.sendAudioBuffer(buffer, format: format)
-                    }
-                } catch {
-                    self.handleCaptureFailure(error)
-                }
+                self?.appState.audioMuter.mute()
             }
         }
     }
