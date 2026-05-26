@@ -209,7 +209,33 @@ class LLMService {
             llmLogger.error("\(provider.displayName) /chat/completions decode failed: \(bodyStr ?? "<binary>")")
             throw APIError.decoding
         }
-        return result
+        return Self.stripReasoning(result)
+    }
+
+    /// Strip reasoning/thinking blocks that some models (DeepSeek R1, Qwen QwQ, etc.) emit
+    /// inline in the assistant content. Handles `<think>...</think>`, `<thinking>...</thinking>`,
+    /// and `<reasoning>...</reasoning>` tags. Case-insensitive, multiline. If an opening tag
+    /// has no closing tag (streamed cut-off), drop everything up to the last seen opener.
+    static func stripReasoning(_ text: String) -> String {
+        let tags = ["think", "thinking", "reasoning"]
+        var output = text
+        for tag in tags {
+            let pattern = "<\\s*\(tag)\\s*>[\\s\\S]*?<\\s*/\\s*\(tag)\\s*>"
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
+                let range = NSRange(output.startIndex..., in: output)
+                output = regex.stringByReplacingMatches(in: output, options: [], range: range, withTemplate: "")
+            }
+            // Unbalanced opener: keep only text after the last opening tag.
+            let openPattern = "<\\s*\(tag)\\s*>"
+            if let openRegex = try? NSRegularExpression(pattern: openPattern, options: [.caseInsensitive]) {
+                let range = NSRange(output.startIndex..., in: output)
+                if let last = openRegex.matches(in: output, options: [], range: range).last,
+                   let swiftRange = Range(last.range, in: output) {
+                    output = String(output[swiftRange.upperBound...])
+                }
+            }
+        }
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func performRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {

@@ -10,9 +10,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.vocalflow.app</string>
     <key>CFBundleVersion</key>
-    <string>6</string>
+    <string>7</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.1.2</string>
+    <string>2.1.3</string>
     <key>CFBundleExecutable</key>
     <string>VocalFlow</string>
     <key>CFBundleIconFile</key>

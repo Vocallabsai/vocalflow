@@ -94,6 +94,47 @@ final class LLMPromptAssemblyTests: XCTestCase {
         XCTAssertLessThan(grammarIdx, translateIdx)
     }
 
+    func testStripReasoningRemovesThinkBlock() {
+        let input = "<think>let me think about this</think>Hi, kyā kar rahe ho?"
+        XCTAssertEqual(LLMService.stripReasoning(input), "Hi, kyā kar rahe ho?")
+    }
+
+    func testStripReasoningRemovesMultilineThinkingBlock() {
+        let input = """
+        <thinking>
+        Step 1: parse
+        Step 2: respond
+        </thinking>
+        Final answer.
+        """
+        XCTAssertEqual(LLMService.stripReasoning(input), "Final answer.")
+    }
+
+    func testStripReasoningRemovesReasoningBlock() {
+        let input = "<reasoning>internal</reasoning>\n\nOutput text"
+        XCTAssertEqual(LLMService.stripReasoning(input), "Output text")
+    }
+
+    func testStripReasoningIsCaseInsensitive() {
+        let input = "<Think>x</THINK>y"
+        XCTAssertEqual(LLMService.stripReasoning(input), "y")
+    }
+
+    func testStripReasoningHandlesUnclosedOpener() {
+        let input = "<think>only opening tag, no close, final answer here"
+        XCTAssertEqual(LLMService.stripReasoning(input), "only opening tag, no close, final answer here".replacingOccurrences(of: "<think>", with: ""))
+    }
+
+    func testStripReasoningLeavesCleanTextUntouched() {
+        let input = "Hello world."
+        XCTAssertEqual(LLMService.stripReasoning(input), "Hello world.")
+    }
+
+    func testStripReasoningHandlesMultipleBlocks() {
+        let input = "<think>a</think>middle<think>b</think>end"
+        XCTAssertEqual(LLMService.stripReasoning(input), "middleend")
+    }
+
     func testHasAnyStepReflectsAnyEnabledOption() {
         XCTAssertFalse(LLMProcessingOptions(codeMix: nil, fixSpelling: false, fixGrammar: false, targetLanguage: nil).hasAnyStep)
         XCTAssertTrue(LLMProcessingOptions(codeMix: "Hinglish", fixSpelling: false, fixGrammar: false, targetLanguage: nil).hasAnyStep)
