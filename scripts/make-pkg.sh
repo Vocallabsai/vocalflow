@@ -31,10 +31,11 @@ NOTARYTOOL_PROFILE="${NOTARYTOOL_PROFILE:-AC_PROFILE_DIALER}"
 ENTITLEMENTS="${ENTITLEMENTS:-Resources/VocalFlow.entitlements}"
 DEPLOY_TARGET="${DEPLOY_TARGET:-13.0}"      # must match Package.swift platforms / LSMinimumSystemVersion
 
-# Sparkle auto-update: the appcast feed URL (must match Info.plist SUFeedURL) and
-# the GitHub repo whose Releases host the update .zip assets.
-SU_FEED_URL="${SU_FEED_URL:-https://vocallabs.ai/vocalflow/appcast.xml}"
-GITHUB_REPO="${GITHUB_REPO:-Vocallabsai/vocalflow}"
+# Sparkle auto-update. The appcast feed and the update .zip are both self-hosted
+# on the website under /releases/vocalflow/ (matching the Vocallabs Dialer
+# convention). RELEASE_BASE must match Info.plist SUFeedURL's directory.
+RELEASE_BASE="${RELEASE_BASE:-https://www.vocallabs.ai/releases/vocalflow}"
+SU_FEED_URL="${SU_FEED_URL:-${RELEASE_BASE}/appcast.xml}"
 
 SKIP_NOTARIZE="${SKIP_NOTARIZE:-0}"          # set to 1 for a local signed-but-not-notarized build
 SKIP_SPARKLE="${SKIP_SPARKLE:-0}"            # set to 1 to skip building the Sparkle update zip + appcast
@@ -262,7 +263,7 @@ if [[ "${SKIP_NOTARIZE}" != "1" && "${SKIP_SPARKLE}" != "1" ]]; then
     echo "    ${SIG_ATTRS}"
 
     BUILD_NUM="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Resources/Info.plist)"
-    DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}/${APP_NAME}-${VERSION}.zip"
+    DOWNLOAD_URL="${RELEASE_BASE}/${APP_NAME}-${VERSION}.zip"
     PUBDATE="$(date -u '+%a, %d %b %Y %H:%M:%S +0000')"
     APPCAST_OUT="${DIST_DIR}/appcast.xml"
 
@@ -280,7 +281,6 @@ if [[ "${SKIP_NOTARIZE}" != "1" && "${SKIP_SPARKLE}" != "1" ]]; then
       <sparkle:version>${BUILD_NUM}</sparkle:version>
       <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>${DEPLOY_TARGET}</sparkle:minimumSystemVersion>
-      <sparkle:releaseNotesLink>https://github.com/${GITHUB_REPO}/releases/tag/v${VERSION}</sparkle:releaseNotesLink>
       <enclosure url="${DOWNLOAD_URL}" ${SIG_ATTRS} type="application/octet-stream"/>
     </item>
   </channel>
@@ -301,6 +301,9 @@ if [[ "${SKIP_NOTARIZE}" != "1" && "${SKIP_SPARKLE}" != "1" ]]; then
     echo ""
     echo "Sparkle update:  ${ZIP_OUT}"
     echo "Appcast:         ${APPCAST_OUT}"
-    echo "  1. Upload ${APP_NAME}-${VERSION}.zip (and ${APP_NAME}.pkg) to the v${VERSION} GitHub release."
-    echo "  2. Deploy appcast.xml to ${SU_FEED_URL}"
+    echo "  1. Copy ${APP_NAME}-${VERSION}.zip + appcast.xml into public/releases/vocalflow/"
+    echo "     in the website repo (aeroIIT/vocallabslpnew), commit, and deploy."
+    echo "     For version history, keep prior ${APP_NAME}-*.zip there and prepend this"
+    echo "     run's <item> to the existing appcast (newest first)."
+    echo "  2. Upload ${APP_NAME}.pkg to the v${VERSION} GitHub release (first-time installers)."
 fi
