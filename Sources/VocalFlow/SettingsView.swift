@@ -90,6 +90,7 @@ private struct APIKeyField: View {
 
 struct SettingsView: View {
     @ObservedObject var appState: AppState
+    @ObservedObject var updater: UpdaterManager
 
     // Deepgram (transcription)
     @State private var apiKeyInput: String = ""
@@ -453,7 +454,15 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         Section("About") {
-            LabeledContent("Version", value: Self.appVersion)
+            HStack {
+                LabeledContent("Version", value: Self.appVersion)
+                Spacer()
+                Button("Check for Updates") {
+                    updater.checkForUpdates()
+                }
+                .disabled(!updater.canCheckForUpdates)
+            }
+            Toggle("Automatically check for updates", isOn: $updater.automaticChecksEnabled)
             Text("VocalFlow — dictate into any text field using ASR")
                 .foregroundColor(.secondary)
                 .font(.caption)

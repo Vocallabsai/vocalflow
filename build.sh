@@ -20,6 +20,15 @@ cp "${BUILD_DIR}/${APP_NAME}" "${MACOS_DIR}/${APP_NAME}"
 cp "Resources/Info.plist" "${CONTENTS}/Info.plist"
 cp "Resources/AppIcon.icns" "${RESOURCES_DIR}/AppIcon.icns"
 
+# Embed Sparkle.framework so the app can launch (the executable finds it via the
+# @executable_path/../Frameworks rpath baked in at link time). --deep ad-hoc
+# signs the nested helpers too — fine for the local dev loop.
+SPARKLE_FW="$(find .build/artifacts -type d -name 'Sparkle.framework' -path '*macos*' 2>/dev/null | head -1)"
+if [[ -d "${SPARKLE_FW}" ]]; then
+    mkdir -p "${CONTENTS}/Frameworks"
+    ditto "${SPARKLE_FW}" "${CONTENTS}/Frameworks/Sparkle.framework"
+fi
+
 echo "Code signing (ad-hoc)..."
 codesign --force --deep --sign - \
     --entitlements "Resources/VocalFlow.entitlements" \

@@ -31,13 +31,27 @@ NOTARYTOOL_PROFILE="${NOTARYTOOL_PROFILE:-AC_PROFILE_DIALER}"
 ENTITLEMENTS="${ENTITLEMENTS:-Resources/VocalFlow.entitlements}"
 DEPLOY_TARGET="${DEPLOY_TARGET:-13.0}"      # must match Package.swift platforms / LSMinimumSystemVersion
 
+# Sparkle auto-update: the appcast feed URL (must match Info.plist SUFeedURL) and
+# the GitHub repo whose Releases host the update .zip assets.
+SU_FEED_URL="${SU_FEED_URL:-https://vocallabs.ai/vocalflow/appcast.xml}"
+GITHUB_REPO="${GITHUB_REPO:-Vocallabsai/vocalflow}"
+
 SKIP_NOTARIZE="${SKIP_NOTARIZE:-0}"          # set to 1 for a local signed-but-not-notarized build
+SKIP_SPARKLE="${SKIP_SPARKLE:-0}"            # set to 1 to skip building the Sparkle update zip + appcast
 
 # ---------------------------------------------------------------------------
 # Derived paths
 # ---------------------------------------------------------------------------
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+
+# SwiftPM shells out to git to resolve dependencies into the per-arch scratch
+# paths. If the machine sets `safe.bareRepository=explicit` globally, git refuses
+# to operate on SwiftPM's bare clones and the build fails. Allow it just for this
+# script's subprocesses (scoped via env, no global git config change).
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0=safe.bareRepository
+export GIT_CONFIG_VALUE_0=all
 
 APP_BUNDLE="${APP_NAME}.app"
 CONTENTS="${APP_BUNDLE}/Contents"
@@ -71,13 +85,21 @@ echo "==> Building x86_64 slice..."
 swift build -c release --scratch-path "${SCRATCH_X86_64}" \
     -Xswiftc -target -Xswiftc "x86_64-apple-macosx${DEPLOY_TARGET}"
 
+# Locate the universal Sparkle.framework that SwiftPM downloaded as a binary
+# artifact (lives under whichever scratch path resolved it first).
+SPARKLE_FW="$(find "${SCRATCH_ARM64}/artifacts" "${SCRATCH_X86_64}/artifacts" .build/artifacts \
+    -type d -name 'Sparkle.framework' -path '*macos*' 2>/dev/null | head -1)"
+if [[ ! -d "${SPARKLE_FW}" ]]; then
+    echo "ERROR: Sparkle.framework not found. Run 'swift package resolve' first." >&2
+    exit 1
+fi
+
 # ---------------------------------------------------------------------------
-# 2. Assemble the .app bundle with a universal binary.
-#    (No Qt / no bundled frameworks — nothing to macdeployqt.)
+# 2. Assemble the .app bundle with a universal binary + embedded Sparkle.
 # ---------------------------------------------------------------------------
 echo "==> Assembling ${APP_BUNDLE} (universal)..."
 rm -rf "${APP_BUNDLE}"
-mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
+mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}" "${CONTENTS}/Frameworks"
 
 lipo -create \
     "${SCRATCH_ARM64}/release/${APP_NAME}" \
@@ -87,19 +109,36 @@ lipo -create \
 cp "Resources/Info.plist"   "${CONTENTS}/Info.plist"
 cp "Resources/AppIcon.icns" "${RESOURCES_DIR}/AppIcon.icns"
 
+# Embed Sparkle.framework (universal). The executable finds it via the
+# @executable_path/../Frameworks rpath baked in at link time.
+echo "==> Embedding Sparkle.framework..."
+ditto "${SPARKLE_FW}" "${CONTENTS}/Frameworks/Sparkle.framework"
+
 echo "    archs: $(lipo -archs "${MACOS_DIR}/${APP_NAME}")"
 
 # ---------------------------------------------------------------------------
-# 3. Sign the .app with the Developer ID Application identity + hardened runtime.
+# 3. Sign inside-out with the Developer ID Application identity + hardened
+#    runtime. Sparkle ships nested helpers (XPC services, Autoupdate, the
+#    Updater.app) that must each be signed before their containing framework,
+#    and the framework before the outer app — codesign seals already-signed
+#    nested code but won't re-sign it for us. (No --deep: Apple discourages it
+#    and it would sign in the wrong order.)
 # ---------------------------------------------------------------------------
-echo "==> Signing ${APP_BUNDLE}..."
-codesign --force --deep --options runtime --timestamp \
-    --entitlements "${ENTITLEMENTS}" \
-    --sign "${APP_CERT}" \
-    "${APP_BUNDLE}"
+SIGN=(--force --options runtime --timestamp --sign "${APP_CERT}")
+SPK="${CONTENTS}/Frameworks/Sparkle.framework/Versions/B"
 
-echo "==> Verifying signature..."
-codesign --verify --strict --verbose=2 "${APP_BUNDLE}"
+echo "==> Signing embedded Sparkle (inside-out)..."
+codesign "${SIGN[@]}" "${SPK}/XPCServices/Downloader.xpc"
+codesign "${SIGN[@]}" "${SPK}/XPCServices/Installer.xpc"
+codesign "${SIGN[@]}" "${SPK}/Autoupdate"
+codesign "${SIGN[@]}" "${SPK}/Updater.app"
+codesign "${SIGN[@]}" "${CONTENTS}/Frameworks/Sparkle.framework"
+
+echo "==> Signing ${APP_BUNDLE}..."
+codesign "${SIGN[@]}" --entitlements "${ENTITLEMENTS}" "${APP_BUNDLE}"
+
+echo "==> Verifying signature (deep, strict)..."
+codesign --verify --deep --strict --verbose=2 "${APP_BUNDLE}"
 codesign -dv --verbose=2 "${APP_BUNDLE}" 2>&1 | grep -E "Authority|TeamIdentifier|flags|Identifier" || true
 
 # ---------------------------------------------------------------------------
@@ -199,6 +238,58 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 8. Sparkle update archive + appcast.
+#    Sparkle installs updates from a .zip of the .app (not the .pkg). The .app
+#    is stapled so Gatekeeper accepts it offline after Sparkle swaps it in, and
+#    the archive is EdDSA-signed with the team's Sparkle key (login keychain).
+#    The .pkg above remains the artifact for first-time installs.
+# ---------------------------------------------------------------------------
+if [[ "${SKIP_NOTARIZE}" != "1" && "${SKIP_SPARKLE}" != "1" ]]; then
+    echo "==> Stapling the .app (for Sparkle's offline Gatekeeper check)..."
+    xcrun stapler staple "${APP_BUNDLE}"
+
+    ZIP_OUT="${DIST_DIR}/${APP_NAME}-${VERSION}.zip"
+    echo "==> Zipping update archive ${ZIP_OUT}..."
+    rm -f "${ZIP_OUT}"
+    ditto -c -k --keepParent "${APP_BUNDLE}" "${ZIP_OUT}"
+
+    SIGN_UPDATE="$(find "${SCRATCH_ARM64}/artifacts" "${SCRATCH_X86_64}/artifacts" .build/artifacts \
+        -type f -name sign_update -path '*bin*' 2>/dev/null | head -1)"
+    [[ -x "${SIGN_UPDATE}" ]] || { echo "ERROR: Sparkle sign_update tool not found." >&2; exit 1; }
+
+    echo "==> EdDSA-signing the archive..."
+    SIG_ATTRS="$("${SIGN_UPDATE}" "${ZIP_OUT}")"   # -> sparkle:edSignature="..." length="..."
+    echo "    ${SIG_ATTRS}"
+
+    BUILD_NUM="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Resources/Info.plist)"
+    DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}/${APP_NAME}-${VERSION}.zip"
+    PUBDATE="$(date -u '+%a, %d %b %Y %H:%M:%S +0000')"
+    APPCAST_OUT="${DIST_DIR}/appcast.xml"
+
+    cat > "${APPCAST_OUT}" <<APPCAST
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>VocalFlow</title>
+    <link>${SU_FEED_URL}</link>
+    <description>Most recent VocalFlow updates.</description>
+    <language>en</language>
+    <item>
+      <title>Version ${VERSION}</title>
+      <pubDate>${PUBDATE}</pubDate>
+      <sparkle:version>${BUILD_NUM}</sparkle:version>
+      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>${DEPLOY_TARGET}</sparkle:minimumSystemVersion>
+      <sparkle:releaseNotesLink>https://github.com/${GITHUB_REPO}/releases/tag/v${VERSION}</sparkle:releaseNotesLink>
+      <enclosure url="${DOWNLOAD_URL}" ${SIG_ATTRS} type="application/octet-stream"/>
+    </item>
+  </channel>
+</rss>
+APPCAST
+    echo "==> Wrote ${APPCAST_OUT}"
+fi
+
+# ---------------------------------------------------------------------------
 # Cleanup intermediates
 # ---------------------------------------------------------------------------
 rm -rf "${STAGING_DIR}" "${SCRIPTS_DIR}" "${COMPONENT_PLIST}" "${COMPONENT_PKG}"
@@ -206,3 +297,10 @@ rm -rf "${STAGING_DIR}" "${SCRIPTS_DIR}" "${COMPONENT_PLIST}" "${COMPONENT_PKG}"
 echo ""
 echo "Done! Installer: ${PKG_OUT}  (v${VERSION})"
 echo "Double-clickable on any Mac (Apple Silicon + Intel) without Gatekeeper warnings."
+if [[ "${SKIP_NOTARIZE}" != "1" && "${SKIP_SPARKLE}" != "1" ]]; then
+    echo ""
+    echo "Sparkle update:  ${ZIP_OUT}"
+    echo "Appcast:         ${APPCAST_OUT}"
+    echo "  1. Upload ${APP_NAME}-${VERSION}.zip (and ${APP_NAME}.pkg) to the v${VERSION} GitHub release."
+    echo "  2. Deploy appcast.xml to ${SU_FEED_URL}"
+fi

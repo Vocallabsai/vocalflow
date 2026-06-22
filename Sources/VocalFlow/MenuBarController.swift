@@ -6,6 +6,7 @@ class MenuBarController {
     private var statusItem: NSStatusItem!
     private var cancellables = Set<AnyCancellable>()
     private let appState: AppState
+    private let updater: UpdaterManager
     private var settingsWindow: NSWindow?
     private var overlayController: RecordingOverlayController?
 
@@ -21,8 +22,9 @@ class MenuBarController {
         return f
     }()
 
-    init(appState: AppState) {
+    init(appState: AppState, updater: UpdaterManager) {
         self.appState = appState
+        self.updater = updater
         setupStatusItem()
         observeState()
         self.overlayController = RecordingOverlayController(appState: appState)
@@ -63,6 +65,14 @@ class MenuBarController {
         )
         settingsItem.target = self
         menu.addItem(settingsItem)
+
+        let updateItem = NSMenuItem(
+            title: "Check for Updates...",
+            action: #selector(checkForUpdates),
+            keyEquivalent: ""
+        )
+        updateItem.target = self
+        menu.addItem(updateItem)
 
         menu.addItem(.separator())
 
@@ -225,6 +235,10 @@ class MenuBarController {
         openSettings()
     }
 
+    @objc private func checkForUpdates() {
+        updater.checkForUpdates()
+    }
+
     @objc private func resetPermissions() {
         let alert = NSAlert()
         alert.messageText = "Reset VocalFlow Permissions?"
@@ -253,7 +267,7 @@ class MenuBarController {
 
     @objc private func openSettings() {
         if settingsWindow == nil {
-            let contentView = SettingsView(appState: appState)
+            let contentView = SettingsView(appState: appState, updater: updater)
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 460, height: 640),
                 styleMask: [.titled, .closable],
