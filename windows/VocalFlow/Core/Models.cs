@@ -54,7 +54,6 @@ public enum HotkeyOption
     LeftAlt,
     RightCtrl,
     LeftCtrl,
-    RightWin,
 }
 
 public static class HotkeyOptionExtensions
@@ -64,8 +63,6 @@ public static class HotkeyOptionExtensions
     public const int VK_RCONTROL = 0xA3;
     public const int VK_LMENU = 0xA4;   // Left Alt
     public const int VK_RMENU = 0xA5;   // Right Alt
-    public const int VK_LWIN = 0x5B;
-    public const int VK_RWIN = 0x5C;
 
     public static string ToRawValue(this HotkeyOption o) => o switch
     {
@@ -73,7 +70,6 @@ public static class HotkeyOptionExtensions
         HotkeyOption.LeftAlt => "left_alt",
         HotkeyOption.RightCtrl => "right_ctrl",
         HotkeyOption.LeftCtrl => "left_ctrl",
-        HotkeyOption.RightWin => "right_win",
         _ => "right_alt",
     };
 
@@ -83,7 +79,7 @@ public static class HotkeyOptionExtensions
         "left_alt" => HotkeyOption.LeftAlt,
         "right_ctrl" => HotkeyOption.RightCtrl,
         "left_ctrl" => HotkeyOption.LeftCtrl,
-        "right_win" => HotkeyOption.RightWin,
+        // "right_win" is no longer offered; anyone who had it picked falls back to the default.
         _ => HotkeyOption.RightAlt,
     };
 
@@ -93,7 +89,6 @@ public static class HotkeyOptionExtensions
         HotkeyOption.LeftAlt => "Left Alt",
         HotkeyOption.RightCtrl => "Right Ctrl",
         HotkeyOption.LeftCtrl => "Left Ctrl",
-        HotkeyOption.RightWin => "Right Win (⊞)",
         _ => "Right Alt",
     };
 
@@ -103,7 +98,6 @@ public static class HotkeyOptionExtensions
         HotkeyOption.LeftAlt => VK_LMENU,
         HotkeyOption.RightCtrl => VK_RCONTROL,
         HotkeyOption.LeftCtrl => VK_LCONTROL,
-        HotkeyOption.RightWin => VK_RWIN,
         _ => VK_RMENU,
     };
 

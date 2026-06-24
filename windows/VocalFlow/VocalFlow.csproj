@@ -10,7 +10,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>VocalFlow</AssemblyName>
     <RootNamespace>VocalFlow</RootNamespace>
-    <Version>1.0.1</Version>
+    <Version>1.0.3</Version>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 

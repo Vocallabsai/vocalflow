@@ -76,7 +76,7 @@ API keys are stored **encrypted with Windows DPAPI** (per-user) under
 
 ## Differences from the macOS version (by necessity)
 
-- **Hotkeys** are Windows modifier keys: Right/Left **Alt**, Right/Left **Ctrl**, Right **Win**
+- **Hotkeys** are Windows modifier keys: Right/Left **Alt**, Right/Left **Ctrl**
   (the Mac uses Option/Command/Fn). Right Alt is the default and the closest analog to Right Option.
   Note: on some keyboard layouts Right Alt is **AltGr** and also emits Left Ctrl — pick Right Ctrl
   or Left Alt if that interferes.
