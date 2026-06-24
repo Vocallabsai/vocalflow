@@ -201,6 +201,16 @@
                     <TextBlock x:Name="VersionText" />
                     <TextBlock Style="{StaticResource Caption}"
                                Text="VocalFlow — dictate into any text field using ASR." />
+
+                    <CheckBox x:Name="AutoUpdateToggle" Content="Automatically check for updates daily"
+                              Margin="0,12,0,0" IsChecked="{Binding AutoUpdateEnabled, Mode=TwoWay}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button x:Name="CheckUpdateBtn" Content="Check for Updates" Padding="14,5"
+                                Style="{StaticResource AccentButton}" Click="OnCheckForUpdates" />
+                        <TextBlock x:Name="UpdateStatus" VerticalAlignment="Center" Margin="10,0,0,0"
+                                   FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

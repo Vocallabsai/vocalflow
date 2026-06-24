@@ -18,6 +18,7 @@ public partial class App : Application
     private AppState? _appState;
     private TrayController? _tray;
     private HotkeyManager? _hotkeyManager;
+    private UpdaterManager? _updater;
     private WelcomeWindow? _welcome;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -32,12 +33,17 @@ public partial class App : Application
             return;
         }
 
+        // Finish any pending self-update from a previous run (remove the swapped-out exe + staging).
+        UpdateService.CleanupAfterUpdate();
+
         var state = new AppState();
         _appState = state;
 
-        _tray = new TrayController(state);
+        _updater = new UpdaterManager(state);
+        _tray = new TrayController(state, _updater);
         _hotkeyManager = new HotkeyManager(state);
         _hotkeyManager.StartListening();
+        _updater.Start();
 
         if (WelcomeWindow.ShouldShow(state))
         {

@@ -16,6 +16,7 @@ public sealed class TrayController : IDisposable
     private const int HistoryPreviewLimit = 60;
 
     private readonly AppState _appState;
+    private readonly UpdaterManager _updater;
     private readonly WinForms.NotifyIcon _notifyIcon;
     private readonly WinForms.ContextMenuStrip _menu;
     private readonly WinForms.ToolStripMenuItem _errorItem;
@@ -26,9 +27,10 @@ public sealed class TrayController : IDisposable
     private OverlayWindow? _overlay;
     private SettingsWindow? _settingsWindow;
 
-    public TrayController(AppState appState)
+    public TrayController(AppState appState, UpdaterManager updater)
     {
         _appState = appState;
+        _updater = updater;
 
         _menu = new WinForms.ContextMenuStrip();
 
@@ -38,6 +40,8 @@ public sealed class TrayController : IDisposable
         _historySeparator = new WinForms.ToolStripSeparator { Visible = false };
 
         var settingsItem = new WinForms.ToolStripMenuItem("Settings...", null, (_, _) => ShowSettings());
+        var updateItem = new WinForms.ToolStripMenuItem("Check for Updates...", null,
+            (_, _) => _ = _updater.CheckForUpdatesAsync(userInitiated: true));
         var micPrivacyItem = new WinForms.ToolStripMenuItem("Microphone Privacy...", null,
             (_, _) => OpenUrl("ms-settings:privacy-microphone"));
         var quitItem = new WinForms.ToolStripMenuItem("Quit VocalFlow", null, (_, _) => Application.Current.Shutdown());
@@ -47,6 +51,7 @@ public sealed class TrayController : IDisposable
         _menu.Items.Add(_historyItem);
         _menu.Items.Add(_historySeparator);
         _menu.Items.Add(settingsItem);
+        _menu.Items.Add(updateItem);
         _menu.Items.Add(new WinForms.ToolStripSeparator());
         _menu.Items.Add(micPrivacyItem);
         _menu.Items.Add(quitItem);
@@ -190,7 +195,7 @@ public sealed class TrayController : IDisposable
     {
         if (_settingsWindow == null)
         {
-            _settingsWindow = new SettingsWindow(_appState);
+            _settingsWindow = new SettingsWindow(_appState, _updater);
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
             _settingsWindow.Show();
         }

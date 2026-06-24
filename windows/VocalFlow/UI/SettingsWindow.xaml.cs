@@ -18,6 +18,7 @@ namespace VocalFlow.UI;
 public partial class SettingsWindow : Window
 {
     private readonly AppState _appState;
+    private readonly UpdaterManager _updater;
     private bool _loading;
 
     private static readonly (string Name, string Description)[] CodeMixOptions =
@@ -36,14 +37,18 @@ public partial class SettingsWindow : Window
         "Tamil", "Telugu", "Kannada", "Marathi", "Punjabi", "Russian", "Chinese (Simplified)", "Italian", "Dutch", "Swahili",
     };
 
-    public SettingsWindow(AppState appState)
+    public SettingsWindow(AppState appState, UpdaterManager updater)
     {
         InitializeComponent();
         Icon = IconFactory.AppImage(); // match the tray / taskbar mic icon
         _appState = appState;
+        _updater = updater;
         DataContext = appState;
         _appState.PropertyChanged += OnAppStateChanged;
+        _updater.StatusChanged += OnUpdaterStatus;
+        _updater.BusyChanged += OnUpdaterBusy;
         Loaded += OnLoaded;
+        Closed += OnSettingsClosed;
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -489,6 +494,22 @@ public partial class SettingsWindow : Window
         var value = name == "None (muted)" ? "" : name;
         _appState.FeedbackSoundName = value;
         if (!string.IsNullOrEmpty(value)) FeedbackSound.Play(value);
+    }
+
+    // MARK: - Updates
+
+    private async void OnCheckForUpdates(object sender, RoutedEventArgs e)
+        => await _updater.CheckForUpdatesAsync(userInitiated: true);
+
+    private void OnUpdaterStatus(string status) => UpdateStatus.Text = status;
+
+    private void OnUpdaterBusy(bool busy) => CheckUpdateBtn.IsEnabled = !busy;
+
+    private void OnSettingsClosed(object? sender, EventArgs e)
+    {
+        _updater.StatusChanged -= OnUpdaterStatus;
+        _updater.BusyChanged -= OnUpdaterBusy;
+        _appState.PropertyChanged -= OnAppStateChanged;
     }
 
     // MARK: - Misc

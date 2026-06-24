@@ -30,6 +30,7 @@ public sealed class AppState : INotifyPropertyChanged
         public const string FeedbackSoundName = "feedback_sound_name";
         public const string SelectedAudioDeviceUid = "selected_audio_device_uid";
         public const string CustomSystemPrompt = "custom_system_prompt";
+        public const string AutoUpdateEnabled = "auto_update_enabled";
     }
 
     // Shared services.
@@ -78,6 +79,9 @@ public sealed class AppState : INotifyPropertyChanged
         _feedbackSoundName = Settings.GetString(Keys.FeedbackSoundName) ?? "Asterisk";
         _customSystemPrompt = Settings.GetString(Keys.CustomSystemPrompt) ?? "";
         _selectedAudioDeviceUid = Settings.GetString(Keys.SelectedAudioDeviceUid) ?? "";
+
+        // Auto-update defaults ON; only an explicit "false" disables it.
+        _autoUpdateEnabled = Settings.GetString(Keys.AutoUpdateEnabled) != "false";
 
         DeepgramService.OnPartialTranscript = text => OnUi(() => LiveTranscript = text);
     }
@@ -250,6 +254,13 @@ public sealed class AppState : INotifyPropertyChanged
     {
         get => _selectedAudioDeviceUid;
         set { if (SetField(ref _selectedAudioDeviceUid, value)) Settings.SetString(Keys.SelectedAudioDeviceUid, value); }
+    }
+
+    private bool _autoUpdateEnabled;
+    public bool AutoUpdateEnabled
+    {
+        get => _autoUpdateEnabled;
+        set { if (SetField(ref _autoUpdateEnabled, value)) Settings.SetBool(Keys.AutoUpdateEnabled, value); }
     }
 
     private IReadOnlyList<AudioInputDevice> _availableAudioDevices = Array.Empty<AudioInputDevice>();
