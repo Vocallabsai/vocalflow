@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Download VocalFlow</title>
+<meta name="description" content="VocalFlow — free, open-source, bring-your-own-key voice dictation for Windows and macOS. Hold a hotkey, speak, and your words are typed into any text field." />
+<style>
+  :root {
+    --bg: #0C0714;
+    --card: #16112A;
+    --control: #1E1838;
+    --border: #272040;
+    --border-strong: #352D55;
+    --text: #F4F2FA;
+    --text-dim: #A79FBE;
+    --accent: #8400FF;
+    --accent-hover: #9A35FF;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(900px 600px at 50% -10%, rgba(132,0,255,0.22), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+    min-height: 100%;
+  }
+  .card {
+    width: 100%;
+    max-width: 460px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent 30%), var(--card);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 40px 36px 32px;
+    text-align: center;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+  }
+  .logo {
+    width: 64px; height: 64px;
+    margin: 0 auto 18px;
+    display: grid; place-items: center;
+    border-radius: 18px;
+    background: linear-gradient(160deg, #9148FF, #6E3EF3);
+    box-shadow: 0 10px 30px rgba(132,0,255,0.45);
+  }
+  .logo svg { width: 34px; height: 34px; display: block; }
+  h1 { font-size: 26px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .tagline { color: var(--text-dim); font-size: 14px; line-height: 1.5; margin: 0 auto 26px; max-width: 340px; }
+
+  .primary {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%;
+    padding: 15px 20px;
+    border: 0; border-radius: var(--radius);
+    background: linear-gradient(160deg, #9148FF, #6E3EF3);
+    color: #fff; font-size: 16px; font-weight: 600; font-family: inherit;
+    text-decoration: none; cursor: pointer;
+    transition: filter .15s ease, transform .05s ease;
+  }
+  .primary:hover { filter: brightness(1.08); }
+  .primary:active { transform: translateY(1px); }
+  .primary[aria-disabled="true"] { opacity: .55; pointer-events: none; }
+  .primary svg { width: 20px; height: 20px; flex: none; }
+  .primary .ver { font-weight: 500; opacity: .8; font-size: 13px; }
+
+  .sub { margin-top: 14px; color: var(--text-dim); font-size: 13px; }
+
+  .alt {
+    margin-top: 22px; padding-top: 22px;
+    border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 10px; align-items: center;
+  }
+  .alt label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .08em; }
+  .select-wrap { position: relative; width: 100%; }
+  select {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; padding: 12px 40px 12px 14px;
+    background: var(--control);
+    color: var(--text); font-size: 14px; font-family: inherit;
+    border: 1px solid var(--border-strong); border-radius: 10px;
+    cursor: pointer;
+  }
+  select:focus { outline: none; border-color: var(--accent); }
+  .select-wrap::after {
+    content: ""; position: absolute; right: 16px; top: 50%;
+    width: 8px; height: 8px; pointer-events: none;
+    border-right: 2px solid var(--text-dim); border-bottom: 2px solid var(--text-dim);
+    transform: translateY(-70%) rotate(45deg);
+  }
+
+  .gh { margin-top: 24px; }
+  .gh a { color: var(--text-dim); font-size: 13px; text-decoration: none; border-bottom: 1px solid transparent; transition: color .15s, border-color .15s; }
+  .gh a:hover { color: var(--text); border-color: var(--border-strong); }
+
+  .note { margin-top: 18px; font-size: 11.5px; color: var(--text-dim); line-height: 1.5; }
+  .err { color: #FF8FA0; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="logo" aria-hidden="true">
+      <!-- mic glyph, matching the app icon -->
+      <svg viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="11" y="4" width="10" height="15" rx="5" />
+        <path d="M7.7 14.6 a8.3 8.3 0 0 0 16.6 0" />
+        <line x1="16" y1="23" x2="16" y2="28" />
+        <line x1="11.5" y1="28" x2="20.5" y2="28" />
+      </svg>
+    </div>
+
+    <h1>VocalFlow</h1>
+    <p class="tagline">Free, open-source, bring-your-own-key voice dictation. Hold a hotkey, speak, and your words are typed into any text field.</p>
+
+    <a id="primaryBtn" class="primary" aria-disabled="true" href="#">
+      <span id="primaryLabel">Detecting your platform…</span>
+    </a>
+    <div id="sub" class="sub"></div>
+
+    <div class="alt">
+      <label for="platform">Other platforms &amp; versions</label>
+      <div class="select-wrap">
+        <select id="platform" aria-label="Choose a platform to download">
+          <option value="" selected disabled>Choose a platform…</option>
+          <option value="windows">Windows (x64)</option>
+          <option value="mac">macOS</option>
+        </select>
+      </div>
+    </div>
+
+    <p class="gh">
+      <a id="ghLink" href="https://github.com/Vocallabsai/vocalflow/releases" target="_blank" rel="noopener">
+        All versions &amp; release notes on GitHub →
+      </a>
+    </p>
+
+    <p id="note" class="note"></p>
+  </main>
+
+<script>
+(function () {
+  const REPO = "Vocallabsai/vocalflow";
+  const RELEASES_PAGE = "https://github.com/" + REPO + "/releases";
+
+  const downloadSvg =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>';
+
+  const els = {
+    btn: document.getElementById("primaryBtn"),
+    label: document.getElementById("primaryLabel"),
+    sub: document.getElementById("sub"),
+    select: document.getElementById("platform"),
+    note: document.getElementById("note"),
+  };
+
+  const OS_LABEL = { windows: "Windows", mac: "macOS" };
+
+  function detectOS() {
+    const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || "";
+    if (/win/i.test(p)) return "windows";
+    if (/mac/i.test(p)) return "mac";
+    return "unknown";
+  }
+
+  function parseVer(tag) {
+    const m = String(tag).replace(/^windows-/, "").match(/^v?(\d+)\.(\d+)\.(\d+)/);
+    return m ? [+m[1], +m[2], +m[3]] : null;
+  }
+  function cmpVer(a, b) { for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; }
+  function verStr(v) { return "v" + v.join("."); }
+
+  function pickAsset(assets, exts) {
+    for (const ext of exts) {
+      const a = assets.find(x => x.name.toLowerCase().endsWith(ext));
+      if (a) return a;
+    }
+    return null;
+  }
+
+  async function loadLatest() {
+    const res = await fetch("https://api.github.com/repos/" + REPO + "/releases?per_page=100", {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!res.ok) throw new Error("GitHub API " + res.status);
+    const rels = await res.json();
+    let win = null, mac = null;
+    for (const r of rels) {
+      if (r.draft || r.prerelease) continue;
+      const ver = parseVer(r.tag_name);
+      if (!ver) continue;
+      if (String(r.tag_name).startsWith("windows-")) {
+        const a = pickAsset(r.assets || [], [".exe"]);
+        if (a && (!win || cmpVer(ver, win.ver) > 0)) win = { ver: ver, url: a.browser_download_url };
+      } else {
+        const a = pickAsset(r.assets || [], [".pkg", ".dmg", ".zip"]);
+        if (a && (!mac || cmpVer(ver, mac.ver) > 0)) mac = { ver: ver, url: a.browser_download_url };
+      }
+    }
+    return { windows: win, mac: mac };
+  }
+
+  function go(url) { if (url) window.location.href = url; }
+
+  function render(data) {
+    const os = detectOS();
+
+    // Wire the dropdown for both platforms (the alternate-download chooser).
+    for (const opt of els.select.options) {
+      const d = data[opt.value];
+      if (d) opt.textContent = (opt.value === "windows" ? "Windows (x64)" : "macOS") + " — " + verStr(d.ver);
+      else if (opt.value) { opt.textContent += " — unavailable"; opt.disabled = true; }
+    }
+    els.select.addEventListener("change", function () {
+      const d = data[this.value];
+      if (d) go(d.url);
+      this.selectedIndex = 0;
+    });
+
+    const primary = os !== "unknown" ? data[os] : null;
+    if (primary) {
+      els.label.innerHTML = downloadSvg + "Download for " + OS_LABEL[os] + ' <span class="ver">' + verStr(primary.ver) + "</span>";
+      els.btn.setAttribute("href", primary.url);
+      els.btn.setAttribute("aria-disabled", "false");
+      const other = os === "windows" ? "mac" : "windows";
+      if (data[other]) els.sub.innerHTML = "Using " + OS_LABEL[other] + "? Pick it from the menu below.";
+    } else {
+      // OS not detected (or no build for it) — steer to the dropdown.
+      els.label.textContent = "Choose your platform below";
+      els.btn.setAttribute("aria-disabled", "true");
+      els.sub.textContent = os === "unknown"
+        ? "We couldn't detect your operating system automatically."
+        : "No build detected for your platform — see all options below.";
+    }
+  }
+
+  function fail() {
+    els.label.innerHTML = downloadSvg + "Download on GitHub";
+    els.btn.setAttribute("href", RELEASES_PAGE);
+    els.btn.setAttribute("aria-disabled", "false");
+    els.btn.setAttribute("target", "_blank");
+    els.note.innerHTML = '<span class="err">Couldn\'t reach GitHub to look up the latest version.</span> Use the link above to download from the releases page.';
+  }
+
+  loadLatest().then(render).catch(function (e) { console.error(e); fail(); });
+})();
+</script>
+</body>
+</html>
