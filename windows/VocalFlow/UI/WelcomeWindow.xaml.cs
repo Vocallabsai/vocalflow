@@ -16,6 +16,7 @@ public partial class WelcomeWindow : Window
     public WelcomeWindow(AppState appState, Action onOpenSettings)
     {
         InitializeComponent();
+        Icon = IconFactory.AppImage(); // match the tray / taskbar mic icon
         _appState = appState;
         _onOpenSettings = onOpenSettings;
         Loaded += (_, _) => _appState.Settings.SetBool(WelcomeShownKey, true);

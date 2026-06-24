@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using VocalFlow.Core;
 
 namespace VocalFlow.UI;
@@ -20,6 +21,33 @@ public static class IconFactory
         var icon = Render(kind, hasError);
         Cache[key] = icon;
         return icon;
+    }
+
+    /// <summary>
+    /// The idle mic glyph as a WPF <see cref="System.Windows.Media.ImageSource"/>, so the window
+    /// title-bar and taskbar icons match the tray icon. Rendered large for crisp scaling.
+    /// </summary>
+    public static System.Windows.Media.ImageSource AppImage(int size = 256)
+    {
+        using var bmp = new Bitmap(size, size);
+        using (var g = Graphics.FromImage(bmp))
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.Clear(Color.Transparent);
+            // Idle state: VocalLabs purple outline mic — identical to the tray's idle icon.
+            DrawMic(g, size, Color.FromArgb(145, 72, 255), filled: false);
+        }
+
+        IntPtr hIcon = bmp.GetHicon();
+        try
+        {
+            var source = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
+                hIcon, System.Windows.Int32Rect.Empty,
+                System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
+            source.Freeze();
+            return source;
+        }
+        finally { DestroyIcon(hIcon); }
     }
 
     private static Icon Render(RecordingStateKind kind, bool hasError)
@@ -53,7 +81,9 @@ public static class IconFactory
 
     private static void DrawMic(Graphics g, int size, Color color, bool filled)
     {
-        using var pen = new Pen(color, 2.4f);
+        // Scale the stroke with the canvas so the glyph stays crisp at any size: the 32px tray
+        // icon keeps its 2.4px stroke, while the large window/taskbar render scales up to match.
+        using var pen = new Pen(color, size * 0.075f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
         using var brush = new SolidBrush(color);
 
         // Capsule body
@@ -107,4 +137,7 @@ public static class IconFactory
         path.CloseFigure();
         return path;
     }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool DestroyIcon(IntPtr handle);
 }

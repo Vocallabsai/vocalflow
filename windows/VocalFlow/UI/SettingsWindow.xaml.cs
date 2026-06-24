@@ -39,6 +39,7 @@ public partial class SettingsWindow : Window
     public SettingsWindow(AppState appState)
     {
         InitializeComponent();
+        Icon = IconFactory.AppImage(); // match the tray / taskbar mic icon
         _appState = appState;
         DataContext = appState;
         _appState.PropertyChanged += OnAppStateChanged;

@@ -6,12 +6,13 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource WindowBgBrush}"
         FontFamily="{StaticResource AppFont}"
-        ResizeMode="CanResize">
+        ResizeMode="NoResize">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
     </Window.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16"
+                  Style="{StaticResource AutoHideScrollViewer}">
         <StackPanel>
 
             <!-- Transcription (Deepgram) -->
