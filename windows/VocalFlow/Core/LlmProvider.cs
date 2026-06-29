@@ -64,6 +64,10 @@ public sealed class LlmProcessingOptions
     public string? TargetLanguage { get; init; } // null = disabled; value = e.g. "French"
     public string? CustomPrompt { get; init; }   // null/empty = disabled
 
+    // Note: the focus-words dictionary is intentionally NOT an LLM step. It's applied
+    // deterministically in code (see FocusWordsDictionary) after any LLM processing, so a
+    // dictionary-only config does not trigger an LLM call.
+
     public bool HasAnyStep
     {
         get

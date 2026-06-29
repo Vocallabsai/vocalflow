@@ -19,6 +19,12 @@ public sealed class DeepgramService
     /// <summary>Cap pre-connection buffer at ~10s of 16 kHz mono Int16 audio.</summary>
     private const int MaxBufferedBytes = 16_000 * 2 * 10;
 
+    /// <summary>
+    /// Deepgram caps keyterm prompting at 500 tokens per request; keep well under that and avoid
+    /// an oversized query string by sending at most this many terms.
+    /// </summary>
+    private const int MaxKeyterms = 100;
+
     private static readonly HttpClient Http = new();
 
     /// <summary>
@@ -42,7 +48,7 @@ public sealed class DeepgramService
     private readonly List<byte[]> _pendingFrames = new();
     private bool _isSocketOpen;
 
-    public void Connect(string apiKey, string model, string language)
+    public void Connect(string apiKey, string model, string language, IReadOnlyList<string>? keyterms = null)
     {
         lock (_lock)
         {
@@ -57,18 +63,35 @@ public sealed class DeepgramService
 
         if (string.IsNullOrEmpty(apiKey)) return;
 
+        var queryParts = new List<string>
+        {
+            "encoding=linear16",
+            "sample_rate=16000",
+            "channels=1",
+            $"model={Uri.EscapeDataString(model)}",
+            $"language={Uri.EscapeDataString(language)}",
+            "punctuate=true",
+            "interim_results=true",
+        };
+
+        // Keyterm prompting biases recognition toward the user's focus words. Gate strictly on
+        // Nova-3 + English (our default, and the config we've confirmed accepts the param): this
+        // query rides the same handshake all dictation depends on, so an unsupported param would
+        // 400 and break every recording. The LLM glossary still corrects spelling for every other
+        // model/language, so a tight gate costs only the recognition boost, never the feature.
+        if (model.StartsWith("nova-3") && language.StartsWith("en") && keyterms != null)
+        {
+            foreach (var term in keyterms.Take(MaxKeyterms))
+            {
+                var trimmed = term.Trim();
+                if (trimmed.Length == 0) continue;
+                queryParts.Add($"keyterm={Uri.EscapeDataString(trimmed)}");
+            }
+        }
+
         var uri = new UriBuilder(ListenUrl)
         {
-            Query = string.Join('&', new[]
-            {
-                "encoding=linear16",
-                "sample_rate=16000",
-                "channels=1",
-                $"model={Uri.EscapeDataString(model)}",
-                $"language={Uri.EscapeDataString(language)}",
-                "punctuate=true",
-                "interim_results=true",
-            }),
+            Query = string.Join('&', queryParts),
         }.Uri;
 
         var ws = new ClientWebSocket();

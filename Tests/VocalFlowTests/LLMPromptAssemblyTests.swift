@@ -135,6 +135,26 @@ final class LLMPromptAssemblyTests: XCTestCase {
         XCTAssertEqual(LLMService.stripReasoning(input), "middleend")
     }
 
+    // The focus-words dictionary is applied deterministically in code (FocusWordsDictionary),
+    // never through the LLM, so it must NOT appear in the system prompt or trigger an LLM call.
+
+    func testDictionaryIsNeverInjectedIntoTheLLMPrompt() {
+        // Even alongside an enabled step, no dictionary text leaks into the prompt.
+        let options = LLMProcessingOptions(
+            codeMix: nil, fixSpelling: true, fixGrammar: false, targetLanguage: nil, customPrompt: nil)
+        let prompt = LLMService.buildSystemPrompt(for: options)!
+        XCTAssertFalse(prompt.contains("dictionary"))
+        XCTAssertFalse(prompt.contains("trigger"))
+        XCTAssertFalse(prompt.contains("→"))
+    }
+
+    func testHasAnyStepIgnoresDictionary() {
+        // A dictionary-only config has no LLM step (the dictionary is applied in code instead).
+        let options = LLMProcessingOptions(
+            codeMix: nil, fixSpelling: false, fixGrammar: false, targetLanguage: nil, customPrompt: nil)
+        XCTAssertFalse(options.hasAnyStep)
+    }
+
     func testHasAnyStepReflectsAnyEnabledOption() {
         XCTAssertFalse(LLMProcessingOptions(codeMix: nil, fixSpelling: false, fixGrammar: false, targetLanguage: nil).hasAnyStep)
         XCTAssertTrue(LLMProcessingOptions(codeMix: "Hinglish", fixSpelling: false, fixGrammar: false, targetLanguage: nil).hasAnyStep)

@@ -18,6 +18,7 @@ private enum DefaultsKey: String {
     case feedbackSoundName       = "feedback_sound_name"
     case selectedAudioDeviceUID  = "selected_audio_device_uid"
     case customSystemPrompt      = "custom_system_prompt"
+    case focusWords              = "focus_words"
 }
 
 private extension UserDefaults {
@@ -202,6 +203,16 @@ class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(customSystemPrompt, forKey: .customSystemPrompt) }
     }
 
+    /// Focus-words dictionary — newline/comma-separated terms (names, emails, jargon) whose exact
+    /// spelling matters. Fed to Deepgram as keyterms (Nova-3 only) and to the LLM as a glossary.
+    /// Empty = disabled.
+    @Published var focusWords: String {
+        didSet { UserDefaults.standard.set(focusWords, forKey: .focusWords) }
+    }
+
+    /// Parsed, de-duplicated focus-word trigger keys. Drives the Deepgram keyterm query.
+    var focusWordTerms: [String] { FocusWordsDictionary.keys(focusWords) }
+
     /// AVCaptureDevice.uniqueID of the chosen mic. Empty string = system default.
     @Published var selectedAudioDeviceUID: String {
         didSet { UserDefaults.standard.set(selectedAudioDeviceUID, forKey: .selectedAudioDeviceUID) }
@@ -264,6 +275,7 @@ class AppState: ObservableObject {
 
         self.feedbackSoundName = UserDefaults.standard.string(forKey: .feedbackSoundName) ?? "Tink"
         self.customSystemPrompt = UserDefaults.standard.string(forKey: .customSystemPrompt) ?? ""
+        self.focusWords = UserDefaults.standard.string(forKey: .focusWords) ?? ""
         self.selectedAudioDeviceUID = UserDefaults.standard.string(forKey: .selectedAudioDeviceUID) ?? ""
 
         self.deepgramService.onPartialTranscript = { [weak self] text in

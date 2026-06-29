@@ -30,6 +30,7 @@ public sealed class AppState : INotifyPropertyChanged
         public const string FeedbackSoundName = "feedback_sound_name";
         public const string SelectedAudioDeviceUid = "selected_audio_device_uid";
         public const string CustomSystemPrompt = "custom_system_prompt";
+        public const string FocusWords = "focus_words";
         public const string AutoUpdateEnabled = "auto_update_enabled";
     }
 
@@ -78,6 +79,7 @@ public sealed class AppState : INotifyPropertyChanged
 
         _feedbackSoundName = Settings.GetString(Keys.FeedbackSoundName) ?? "Asterisk";
         _customSystemPrompt = Settings.GetString(Keys.CustomSystemPrompt) ?? "";
+        _focusWords = Settings.GetString(Keys.FocusWords) ?? "";
         _selectedAudioDeviceUid = Settings.GetString(Keys.SelectedAudioDeviceUid) ?? "";
 
         // Auto-update defaults ON; only an explicit "false" disables it.
@@ -248,6 +250,21 @@ public sealed class AppState : INotifyPropertyChanged
         get => _customSystemPrompt;
         set { if (SetField(ref _customSystemPrompt, value)) Settings.SetString(Keys.CustomSystemPrompt, value); }
     }
+
+    private string _focusWords;
+    /// <summary>
+    /// Focus-words dictionary — newline/comma-separated terms (names, emails, jargon) whose exact
+    /// spelling matters. Fed to Deepgram as keyterms (Nova-3 only) and to the LLM as a glossary.
+    /// Empty = disabled.
+    /// </summary>
+    public string FocusWords
+    {
+        get => _focusWords;
+        set { if (SetField(ref _focusWords, value)) Settings.SetString(Keys.FocusWords, value); }
+    }
+
+    /// <summary>Parsed, de-duplicated focus-word trigger keys. Drives the Deepgram keyterm query.</summary>
+    public IReadOnlyList<string> FocusWordTerms => FocusWordsDictionary.Keys(_focusWords);
 
     private string _selectedAudioDeviceUid;
     public string SelectedAudioDeviceUid
