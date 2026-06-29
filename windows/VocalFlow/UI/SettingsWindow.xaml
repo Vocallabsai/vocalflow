@@ -155,6 +155,19 @@
                 </StackPanel>
             </Border>
 
+            <!-- Focus Words -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel x:Name="FocusWordsSection">
+                    <TextBlock Text="Focus Words" Style="{StaticResource SectionHeader}" />
+                    <TextBlock Style="{StaticResource Caption}"
+                               Text="One entry per line. Use &quot;trigger : replacement&quot; to expand a phrase you say into longer text — e.g. &quot;my email : johndoe@gmail.com&quot; types the address whenever you say &quot;my email&quot;. A line with no colon keeps that word spelled exactly as written (handy for names)." />
+                    <TextBox x:Name="FocusWordsBox" Margin="0,8,0,0" MinHeight="90" MaxHeight="180"
+                             AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                             FontFamily="Consolas"
+                             Text="{Binding FocusWords, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                </StackPanel>
+            </Border>
+
             <!-- Microphone -->
             <Border Style="{StaticResource Card}">
                 <StackPanel>

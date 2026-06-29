@@ -51,7 +51,11 @@ class DeepgramService: NSObject, URLSessionWebSocketDelegate {
         )
     }
 
-    func connect(apiKey: String, model: String, language: String) {
+    /// Deepgram caps keyterm prompting at 500 tokens per request; keep well under that and avoid
+    /// an oversized query string by sending at most this many terms.
+    private static let maxKeyterms = 100
+
+    func connect(apiKey: String, model: String, language: String, keyterms: [String] = []) {
         accumulatedTranscript = ""
         currentInterim = ""
         isWaitingForFinal = false
@@ -67,7 +71,7 @@ class DeepgramService: NSObject, URLSessionWebSocketDelegate {
         guard var components = URLComponents(url: Self.listenURL, resolvingAgainstBaseURL: false) else {
             preconditionFailure("Invalid Deepgram listen URL")
         }
-        components.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "encoding",        value: "linear16"),
             URLQueryItem(name: "sample_rate",     value: "16000"),
             URLQueryItem(name: "channels",        value: "1"),
@@ -76,6 +80,20 @@ class DeepgramService: NSObject, URLSessionWebSocketDelegate {
             URLQueryItem(name: "punctuate",       value: "true"),
             URLQueryItem(name: "interim_results", value: "true"),
         ]
+
+        // Keyterm prompting biases recognition toward the user's focus words. Gate strictly on
+        // Nova-3 + English (our default, and the config we've confirmed accepts the param): this
+        // query rides the same handshake all dictation depends on, so an unsupported param would
+        // 400 and break every recording. The LLM glossary still corrects spelling for every other
+        // model/language, so a tight gate costs only the recognition boost, never the feature.
+        if model.hasPrefix("nova-3") && language.hasPrefix("en") {
+            for term in keyterms.prefix(Self.maxKeyterms) {
+                let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { continue }
+                queryItems.append(URLQueryItem(name: "keyterm", value: trimmed))
+            }
+        }
+        components.queryItems = queryItems
 
         guard let url = components.url else {
             preconditionFailure("Failed to build Deepgram listen URL from components")

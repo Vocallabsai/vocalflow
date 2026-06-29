@@ -53,10 +53,14 @@ struct LLMProcessingOptions {
     var targetLanguage: String? // nil = disabled; value = e.g. "French"
     var customPrompt: String?   // nil/empty = disabled; user-supplied bias prepended to system prompt
 
+    // Note: the focus-words dictionary is intentionally NOT an LLM step. It's applied
+    // deterministically in code (see FocusWordsDictionary) after any LLM processing, so a
+    // dictionary-only config does not trigger an LLM call.
+
     var hasAnyStep: Bool {
         if codeMix != nil || fixSpelling || fixGrammar || targetLanguage != nil { return true }
-        let trimmed = customPrompt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return !trimmed.isEmpty
+        let trimmedCustom = customPrompt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !trimmedCustom.isEmpty
     }
 }
 

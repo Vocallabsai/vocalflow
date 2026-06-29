@@ -155,6 +155,7 @@ struct SettingsView: View {
             llmSection
             correctionsSection
             customPromptSection
+            focusWordsSection
             microphoneSection
             hotkeySection
             permissionsSection
@@ -405,6 +406,24 @@ struct SettingsView: View {
             }
         }
         .disabled(!llmConfigured)
+    }
+
+    private var focusWordsSection: some View {
+        Section("Focus Words") {
+            Text("One entry per line. Use \"trigger : replacement\" to expand a phrase you say into longer text — e.g. \"my email : johndoe@gmail.com\" types the address whenever you say \"my email\". A line with no colon keeps that word spelled exactly as written (handy for names).")
+                .foregroundColor(.secondary)
+                .font(.caption)
+
+            TextEditor(text: $appState.focusWords)
+                .font(.system(.body, design: .monospaced))
+                .frame(minHeight: 90, maxHeight: 180)
+                .scrollContentBackground(.hidden)
+                .padding(4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+                )
+        }
     }
 
     private var hotkeySection: some View {

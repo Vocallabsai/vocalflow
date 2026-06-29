@@ -53,7 +53,8 @@ class HotkeyManager {
             self.appState.deepgramService.connect(
                 apiKey: self.appState.deepgramAPIKey,
                 model: self.appState.selectedModel,
-                language: self.appState.selectedLanguage
+                language: self.appState.selectedLanguage,
+                keyterms: self.appState.focusWordTerms
             )
             do {
                 try self.appState.audioEngine.startCapture(
@@ -159,9 +160,13 @@ class HotkeyManager {
                 }
             }
 
-            let typed = processed ?? finalTranscript
+            // Apply the focus-words dictionary deterministically as the final pass — after any LLM
+            // processing — so it's the authoritative spelling/expansion override and works even with
+            // no LLM configured.
+            let llmText = processed ?? finalTranscript
+            let typed = FocusWordsDictionary.apply(self.appState.focusWords, to: llmText)
             self.appState.lastTranscript = typed
-            self.appState.recordTranscript(raw: finalTranscript, processed: processed)
+            self.appState.recordTranscript(raw: finalTranscript, processed: typed == finalTranscript ? nil : typed)
             self.appState.textInjector.inject(text: typed)
             self.appState.recordingState = .idle
         }

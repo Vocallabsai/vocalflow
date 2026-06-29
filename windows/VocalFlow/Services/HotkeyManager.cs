@@ -86,7 +86,8 @@ public sealed class HotkeyManager : IDisposable
         _appState.DeepgramService.Connect(
             _appState.DeepgramApiKey,
             _appState.SelectedModel,
-            _appState.SelectedLanguage);
+            _appState.SelectedLanguage,
+            _appState.FocusWordTerms);
 
         try
         {
@@ -178,9 +179,13 @@ public sealed class HotkeyManager : IDisposable
             }
         }
 
-        string typed = processed ?? finalTranscript;
+        // Apply the focus-words dictionary deterministically as the final pass — after any LLM
+        // processing — so it's the authoritative spelling/expansion override and works even with
+        // no LLM configured.
+        string llmText = processed ?? finalTranscript;
+        string typed = FocusWordsDictionary.Apply(_appState.FocusWords, llmText);
         _appState.LastTranscript = typed;
-        _appState.RecordTranscript(finalTranscript, processed);
+        _appState.RecordTranscript(finalTranscript, typed == finalTranscript ? null : typed);
         _appState.TextInjector.Inject(typed);
         _appState.RecordingState = RecordingState.Idle;
     }
