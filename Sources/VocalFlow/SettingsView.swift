@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-// NSTextField wrapper that forces left alignment and supports secure mode
+// NSTextField wrapper that forces left alignment and supports secure mode.
 private struct LeftAlignedTextField: NSViewRepresentable {
     @Binding var text: String
     var isSecure: Bool
@@ -12,12 +12,15 @@ private struct LeftAlignedTextField: NSViewRepresentable {
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
+        field.textColor = NSColor(Color.vlTextPrimary)
+        field.font = .systemFont(ofSize: NSFont.systemFontSize)
         field.delegate = context.coordinator
         return field
     }
 
     func updateNSView(_ nsView: NSTextField, context: Context) {
         if nsView.stringValue != text { nsView.stringValue = text }
+        nsView.textColor = NSColor(Color.vlTextPrimary)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
@@ -31,45 +34,7 @@ private struct LeftAlignedTextField: NSViewRepresentable {
     }
 }
 
-// Section header with a trailing action button (e.g. Fetch / Refresh)
-private struct SectionHeader: View {
-    let title: String
-    let actionLabel: String?
-    let isLoading: Bool
-    let isDisabled: Bool
-    let action: (() -> Void)?
-
-    init(_ title: String,
-         actionLabel: String? = nil,
-         isLoading: Bool = false,
-         isDisabled: Bool = false,
-         action: (() -> Void)? = nil) {
-        self.title = title
-        self.actionLabel = actionLabel
-        self.isLoading = isLoading
-        self.isDisabled = isDisabled
-        self.action = action
-    }
-
-    var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
-            if let actionLabel, let action {
-                Button(action: action) {
-                    if isLoading {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Text(actionLabel).font(.caption)
-                    }
-                }
-                .disabled(isDisabled || isLoading)
-            }
-        }
-    }
-}
-
-// Labeled secure key field with a show/hide toggle
+// Branded secure key field on the control surface, with a show/hide toggle.
 private struct APIKeyField: View {
     @Binding var text: String
     @Binding var isVisible: Bool
@@ -80,11 +45,19 @@ private struct APIKeyField: View {
             LeftAlignedTextField(text: $text, isSecure: !isVisible)
                 .frame(maxWidth: .infinity, minHeight: 20)
                 .id("\(idSalt)-\(isVisible)")
-            Button(isVisible ? "Hide" : "Show") {
-                isVisible.toggle()
-            }
-            .buttonStyle(.borderless)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .vlControlSurface()
+            Button(isVisible ? "Hide" : "Show") { isVisible.toggle() }
+                .buttonStyle(VLSecondaryButtonStyle())
         }
+    }
+}
+
+// Thin in-card divider in the brand border color.
+private struct VLInlineDivider: View {
+    var body: some View {
+        Rectangle().fill(Color.vlCardBorder).frame(height: 1).padding(.vertical, 2)
     }
 }
 
@@ -150,19 +123,24 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        Form {
-            transcriptionSection
-            llmSection
-            correctionsSection
-            customPromptSection
-            focusWordsSection
-            microphoneSection
-            hotkeySection
-            permissionsSection
-            aboutSection
+        ScrollView {
+            VStack(spacing: 12) {
+                transcriptionSection
+                llmSection
+                correctionsSection
+                customPromptSection
+                focusWordsSection
+                microphoneSection
+                hotkeySection
+                permissionsSection
+                aboutSection
+            }
+            .padding(16)
         }
-        .formStyle(.grouped)
         .frame(width: 460, height: 640)
+        .background(Color.vlWindowBg)
+        .tint(.vlAccent)
+        .preferredColorScheme(.dark)
         .onAppear {
             apiKeyInput = appState.deepgramAPIKey
             syncLLMKeyInputForCurrentProvider()
@@ -176,44 +154,21 @@ struct SettingsView: View {
         }
     }
 
-    private var microphoneSection: some View {
-        Section(header: SectionHeader(
-            "Microphone",
-            actionLabel: "Refresh",
-            action: { appState.refreshAudioDevices() }
-        )) {
-            Picker("Input device", selection: $appState.selectedAudioDeviceUID) {
-                Text("System default").tag("")
-                ForEach(appState.availableAudioDevices) { device in
-                    Text(device.name).tag(device.id)
-                }
-                // Surface a stale selection so the user knows they're on a
-                // device that isn't currently plugged in.
-                if !appState.selectedAudioDeviceUID.isEmpty,
-                   !appState.availableAudioDevices.contains(where: { $0.id == appState.selectedAudioDeviceUID }) {
-                    Text("Unavailable (\(appState.selectedAudioDeviceUID))")
-                        .tag(appState.selectedAudioDeviceUID)
-                }
-            }
-            Text("Pin recording to a specific mic. Useful when macOS picks AirPods over your USB mic.")
-                .foregroundColor(.secondary)
-                .font(.caption)
-        }
-    }
-
     // MARK: - Sections
 
     private var transcriptionSection: some View {
-        Section(header: SectionHeader(
-            "Transcription (Deepgram)",
-            actionLabel: appState.availableModels.isEmpty ? "Fetch Models" : "Refresh",
-            isLoading: isFetchingModels,
-            isDisabled: appState.deepgramAPIKey.isEmpty,
-            action: { Task { await fetchModels() } }
-        )) {
+        VLCard {
+            VLCardHeader(
+                title: "Transcription (Deepgram)",
+                actionLabel: appState.availableModels.isEmpty ? "Fetch Models" : "Refresh",
+                isLoading: isFetchingModels,
+                isDisabled: appState.deepgramAPIKey.isEmpty,
+                action: { Task { await fetchModels() } }
+            )
+
             APIKeyField(text: $apiKeyInput, isVisible: $showAPIKey, idSalt: "deepgram")
 
-            HStack {
+            HStack(spacing: 10) {
                 Button("Save & Verify") {
                     appState.keychainService.store(key: "deepgram_api_key", value: apiKeyInput)
                     appState.deepgramAPIKey = apiKeyInput
@@ -225,26 +180,30 @@ struct SettingsView: View {
                         saveStatus = ""
                     }
                 }
+                .buttonStyle(VLAccentButtonStyle())
                 .disabled(apiKeyInput.isEmpty)
 
                 if !saveStatus.isEmpty {
                     Text(saveStatus)
-                        .foregroundColor(saveStatus.contains("failed") ? .red : .green)
-                        .font(.caption)
+                        .font(.system(size: 11))
+                        .foregroundStyle(saveStatus.contains("failed") ? Color.vlError : Color.vlSuccess)
                 }
                 Spacer()
                 Link("Get an API key →",
                      destination: URL(staticString: "https://console.deepgram.com/signup"))
-                    .font(.caption)
+                    .font(.system(size: 11))
             }
 
             if !appState.availableModels.isEmpty || !appState.deepgramAPIKey.isEmpty {
-                Divider().padding(.vertical, 2)
+                VLInlineDivider()
 
-                HStack {
-                    Text("Model").frame(maxWidth: .infinity, alignment: .leading)
+                VLField(label: "Model") {
                     if appState.availableModels.isEmpty {
                         TextField("", text: $appState.selectedModel)
+                            .textFieldStyle(.plain)
+                            .foregroundStyle(Color.vlTextPrimary)
+                            .padding(.horizontal, 8).padding(.vertical, 5)
+                            .vlControlSurface()
                     } else {
                         Picker("", selection: $appState.selectedModel) {
                             ForEach(appState.availableModels) { model in
@@ -262,43 +221,52 @@ struct SettingsView: View {
                     .first(where: { $0.canonicalName == appState.selectedModel })?.languages ?? []
 
                 if !languages.isEmpty {
-                    Picker("Language", selection: $appState.selectedLanguage) {
-                        ForEach(languages, id: \.self) { lang in
-                            Text(lang == "multi" ? "multi (Code-switching)" : lang).tag(lang)
+                    VLField(label: "Language") {
+                        Picker("", selection: $appState.selectedLanguage) {
+                            ForEach(languages, id: \.self) { lang in
+                                Text(lang == "multi" ? "multi (Code-switching)" : lang).tag(lang)
+                            }
                         }
+                        .labelsHidden()
                     }
                 }
             }
 
             if let error = modelFetchError {
-                Text(error).foregroundColor(.red).font(.caption)
+                Text(error).font(.system(size: 11)).foregroundStyle(Color.vlError)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
     private var llmSection: some View {
-        Section(header: SectionHeader(
-            "LLM Post-Processing",
-            actionLabel: currentProviderModels.isEmpty ? "Fetch Models" : "Refresh",
-            isLoading: isFetchingLLMModels,
-            isDisabled: appState.currentLLMAPIKey.isEmpty,
-            action: { Task { await fetchLLMModels() } }
-        )) {
-            Picker("Provider", selection: $appState.selectedLLMProvider) {
-                ForEach(LLMProvider.allCases) { provider in
-                    Text(provider.displayName).tag(provider)
+        VLCard {
+            VLCardHeader(
+                title: "LLM Post-Processing",
+                actionLabel: currentProviderModels.isEmpty ? "Fetch Models" : "Refresh",
+                isLoading: isFetchingLLMModels,
+                isDisabled: appState.currentLLMAPIKey.isEmpty,
+                action: { Task { await fetchLLMModels() } }
+            )
+
+            VLField(label: "Provider") {
+                Picker("", selection: $appState.selectedLLMProvider) {
+                    ForEach(LLMProvider.allCases) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
                 }
-            }
-            .onChange(of: appState.selectedLLMProvider) { _ in
-                syncLLMKeyInputForCurrentProvider()
-                llmModelFetchError = nil
-                llmSaveStatus = ""
+                .labelsHidden()
+                .onChange(of: appState.selectedLLMProvider) { _ in
+                    syncLLMKeyInputForCurrentProvider()
+                    llmModelFetchError = nil
+                    llmSaveStatus = ""
+                }
             }
 
             APIKeyField(text: $llmKeyInput, isVisible: $showLLMKey,
                         idSalt: appState.selectedLLMProvider.rawValue)
 
-            HStack {
+            HStack(spacing: 10) {
                 Button("Save & Verify") {
                     let provider = appState.selectedLLMProvider
                     appState.keychainService.store(key: provider.keychainKey, value: llmKeyInput)
@@ -314,23 +282,23 @@ struct SettingsView: View {
                         llmSaveStatus = ""
                     }
                 }
+                .buttonStyle(VLAccentButtonStyle())
                 .disabled(llmKeyInput.isEmpty)
 
                 if !llmSaveStatus.isEmpty {
                     Text(llmSaveStatus)
-                        .foregroundColor(llmSaveStatus.contains("failed") ? .red : .green)
-                        .font(.caption)
+                        .font(.system(size: 11))
+                        .foregroundStyle(llmSaveStatus.contains("failed") ? Color.vlError : Color.vlSuccess)
                 }
                 Spacer()
                 Link("Get a \(appState.selectedLLMProvider.displayName) key →",
                      destination: appState.selectedLLMProvider.signupURL)
-                    .font(.caption)
+                    .font(.system(size: 11))
             }
 
             if !currentProviderModels.isEmpty {
-                Divider().padding(.vertical, 2)
-                HStack {
-                    Text("Model").frame(maxWidth: .infinity, alignment: .leading)
+                VLInlineDivider()
+                VLField(label: "Model") {
                     Picker("", selection: currentProviderSelectedModel) {
                         ForEach(currentProviderModels) { model in
                             Text(model.displayName).tag(model.id)
@@ -341,38 +309,43 @@ struct SettingsView: View {
             }
 
             if let error = llmModelFetchError {
-                Text(error).foregroundColor(.red).font(.caption)
+                Text(error).font(.system(size: 11)).foregroundStyle(Color.vlError)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
     private var correctionsSection: some View {
-        Section("Corrections & Features") {
+        VLCard {
+            VLCardHeader(title: "Corrections & Features")
             if !llmConfigured {
-                Text("Configure an LLM provider above to enable these features.")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
+                Text("Configure an LLM provider above to enable these features.").vlCaption()
             }
 
             Toggle("Spelling Correction", isOn: $appState.correctionModeEnabled)
             Toggle("Grammar Correction", isOn: $appState.grammarCorrectionEnabled)
-
             Toggle("Code-Mix Input", isOn: $appState.codeMixEnabled)
             if appState.codeMixEnabled {
-                Picker("Style", selection: $appState.selectedCodeMix) {
-                    Text("Select…").tag("")
-                    ForEach(codeMixOptions, id: \.name) { opt in
-                        Text("\(opt.name) (\(opt.description))").tag(opt.name)
+                VLField(label: "Style") {
+                    Picker("", selection: $appState.selectedCodeMix) {
+                        Text("Select…").tag("")
+                        ForEach(codeMixOptions, id: \.name) { opt in
+                            Text("\(opt.name) (\(opt.description))").tag(opt.name)
+                        }
                     }
+                    .labelsHidden()
                 }
             }
 
             Toggle("Convert to Language", isOn: $appState.targetLanguageEnabled)
             if appState.targetLanguageEnabled {
-                Picker("Target", selection: $appState.selectedTargetLanguage) {
-                    ForEach(targetLanguages, id: \.self) { lang in
-                        Text(lang).tag(lang)
+                VLField(label: "Target") {
+                    Picker("", selection: $appState.selectedTargetLanguage) {
+                        ForEach(targetLanguages, id: \.self) { lang in
+                            Text(lang).tag(lang)
+                        }
                     }
+                    .labelsHidden()
                 }
             }
         }
@@ -380,72 +353,89 @@ struct SettingsView: View {
     }
 
     private var customPromptSection: some View {
-        Section("Custom Instructions") {
-            Text("Prepended to the LLM system prompt on every dictation. Use it to bias output (e.g. \"always formal English\", \"use Markdown lists\", or supply a glossary).")
-                .foregroundColor(.secondary)
-                .font(.caption)
+        VLCard {
+            VLCardHeader(title: "Custom Instructions")
+            Text("Prepended to the LLM system prompt on every dictation. Use it to bias output (e.g. \"always formal English\", \"use Markdown lists\", or supply a glossary).").vlCaption()
 
             TextEditor(text: $appState.customSystemPrompt)
                 .font(.system(.body, design: .monospaced))
-                .frame(minHeight: 90, maxHeight: 180)
+                .foregroundStyle(Color.vlTextPrimary)
                 .scrollContentBackground(.hidden)
-                .padding(4)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
-                )
+                .padding(8)
+                .frame(minHeight: 90, maxHeight: 180)
+                .vlControlSurface()
 
             if !llmConfigured {
-                Text("Configure an LLM provider above to enable.")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
+                Text("Configure an LLM provider above to enable.").vlCaption()
             } else if appState.customSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text("Empty — no custom instructions applied.")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
+                Text("Empty — no custom instructions applied.").vlCaption()
             }
         }
         .disabled(!llmConfigured)
     }
 
     private var focusWordsSection: some View {
-        Section("Focus Words") {
-            Text("One entry per line. Use \"trigger : replacement\" to expand a phrase you say into longer text — e.g. \"my email : johndoe@gmail.com\" types the address whenever you say \"my email\". A line with no colon keeps that word spelled exactly as written (handy for names).")
-                .foregroundColor(.secondary)
-                .font(.caption)
+        VLCard {
+            VLCardHeader(title: "Focus Words")
+            Text("One entry per line. Use \"trigger : replacement\" to expand a phrase you say into longer text — e.g. \"my email : johndoe@gmail.com\" types the address whenever you say \"my email\". A line with no colon keeps that word spelled exactly as written (handy for names).").vlCaption()
 
             TextEditor(text: $appState.focusWords)
                 .font(.system(.body, design: .monospaced))
-                .frame(minHeight: 90, maxHeight: 180)
+                .foregroundStyle(Color.vlTextPrimary)
                 .scrollContentBackground(.hidden)
-                .padding(4)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
-                )
+                .padding(8)
+                .frame(minHeight: 90, maxHeight: 180)
+                .vlControlSurface()
+        }
+    }
+
+    private var microphoneSection: some View {
+        VLCard {
+            VLCardHeader(title: "Microphone", actionLabel: "Refresh",
+                         action: { appState.refreshAudioDevices() })
+            VLField(label: "Input device") {
+                Picker("", selection: $appState.selectedAudioDeviceUID) {
+                    Text("System default").tag("")
+                    ForEach(appState.availableAudioDevices) { device in
+                        Text(device.name).tag(device.id)
+                    }
+                    if !appState.selectedAudioDeviceUID.isEmpty,
+                       !appState.availableAudioDevices.contains(where: { $0.id == appState.selectedAudioDeviceUID }) {
+                        Text("Unavailable (\(appState.selectedAudioDeviceUID))")
+                            .tag(appState.selectedAudioDeviceUID)
+                    }
+                }
+                .labelsHidden()
+            }
+            Text("Pin recording to a specific mic. Useful when macOS picks AirPods over your USB mic.").vlCaption()
         }
     }
 
     private var hotkeySection: some View {
-        Section("Hotkey") {
-            Picker("Trigger key", selection: $appState.selectedHotkey) {
-                ForEach(HotkeyOption.allCases) { option in
-                    Text(option.displayName).tag(option)
+        VLCard {
+            VLCardHeader(title: "Hotkey")
+            VLField(label: "Trigger key") {
+                Picker("", selection: $appState.selectedHotkey) {
+                    ForEach(HotkeyOption.allCases) { option in
+                        Text(option.displayName).tag(option)
+                    }
                 }
+                .labelsHidden()
             }
-            Text("Hold the selected key to record, release to transcribe.")
-                .foregroundColor(.secondary)
-                .font(.caption)
+            Text("Hold the selected key to record, release to transcribe.").vlCaption()
 
-            Picker("Feedback sound", selection: $appState.feedbackSoundName) {
-                Text("None (muted)").tag("")
-                ForEach(Self.feedbackSoundOptions, id: \.self) { name in
-                    Text(name).tag(name)
+            VLField(label: "Feedback sound") {
+                Picker("", selection: $appState.feedbackSoundName) {
+                    Text("None (muted)").tag("")
+                    ForEach(Self.feedbackSoundOptions, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
                 }
-            }
-            .onChange(of: appState.feedbackSoundName) { newValue in
-                if !newValue.isEmpty {
-                    NSSound(named: NSSound.Name(newValue))?.play()
+                .labelsHidden()
+                .onChange(of: appState.feedbackSoundName) { newValue in
+                    if !newValue.isEmpty {
+                        NSSound(named: NSSound.Name(newValue))?.play()
+                    }
                 }
             }
         }
@@ -457,12 +447,14 @@ struct SettingsView: View {
     ]
 
     private var permissionsSection: some View {
-        Section("Permissions") {
+        VLCard {
+            VLCardHeader(title: "Permissions")
             PermissionRowView(
                 label: "Microphone",
                 detail: "Required for audio capture",
                 settingsURL: SystemPrefsURL.microphone
             )
+            VLInlineDivider()
             PermissionRowView(
                 label: "Accessibility",
                 detail: "Required for global hotkey and text injection",
@@ -472,19 +464,20 @@ struct SettingsView: View {
     }
 
     private var aboutSection: some View {
-        Section("About") {
+        VLCard {
+            VLCardHeader(title: "About")
             HStack {
-                LabeledContent("Version", value: Self.appVersion)
+                Text("Version").foregroundStyle(Color.vlTextPrimary)
+                Text(Self.appVersion).foregroundStyle(Color.vlTextSecondary)
                 Spacer()
                 Button("Check for Updates") {
                     updater.checkForUpdates()
                 }
+                .buttonStyle(VLAccentButtonStyle())
                 .disabled(!updater.canCheckForUpdates)
             }
             Toggle("Automatically check for updates", isOn: $updater.automaticChecksEnabled)
-            Text("VocalFlow — dictate into any text field using ASR")
-                .foregroundColor(.secondary)
-                .font(.caption)
+            Text("VocalFlow — dictate into any text field using ASR").vlCaption()
         }
     }
 
@@ -589,15 +582,14 @@ private struct PermissionRowView: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(label).fontWeight(.medium)
-                Text(detail).font(.caption).foregroundColor(.secondary)
+                Text(label).fontWeight(.medium).foregroundStyle(Color.vlTextPrimary)
+                Text(detail).font(.system(size: 11)).foregroundStyle(Color.vlTextSecondary)
             }
             Spacer()
             Button("Open Settings") {
                 NSWorkspace.shared.open(settingsURL)
             }
-            .buttonStyle(.borderless)
-            .foregroundColor(.accentColor)
+            .buttonStyle(VLSecondaryButtonStyle())
         }
     }
 }
