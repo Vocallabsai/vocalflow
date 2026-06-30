@@ -277,6 +277,14 @@ class MenuBarController {
             window.contentView = NSHostingView(rootView: contentView)
             window.title = "VocalFlow Settings"
             window.isReleasedWhenClosed = false
+            // Blend the titlebar into the brand-dark window: dark appearance so
+            // the traffic lights + title render for dark mode, a transparent
+            // titlebar (drops the separator line), and the brand background so
+            // the bar is the same colour as the content below it.
+            window.appearance = NSAppearance(named: .darkAqua)
+            window.titlebarAppearsTransparent = true
+            window.backgroundColor = NSColor(Color.vlWindowBg)
+            window.isMovableByWindowBackground = true
             self.settingsWindow = window
         }
         settingsWindow?.center()
