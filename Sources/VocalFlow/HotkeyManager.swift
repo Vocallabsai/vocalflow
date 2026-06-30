@@ -168,6 +168,8 @@ class HotkeyManager {
             self.appState.lastTranscript = typed
             self.appState.recordTranscript(raw: finalTranscript, processed: typed == finalTranscript ? nil : typed)
             self.appState.textInjector.inject(text: typed)
+            // Watch the focused field: if the user fixes a word's spelling, learn it.
+            self.appState.noteInjection(typed)
             self.appState.recordingState = .idle
         }
     }
