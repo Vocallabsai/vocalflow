@@ -232,6 +232,9 @@ class AppState: ObservableObject {
     let deepgramService: DeepgramService
     let llmService: LLMService = LLMService()
     let textInjector: TextInjector = TextInjector()
+    /// Watches for the user typing over a word VocalFlow just injected, and learns
+    /// the corrected spelling into the focus-words dictionary.
+    let typeOverWatcher: TypeOverWatcher = TypeOverWatcher()
     let keychainService: KeychainService = KeychainService()
     let audioMuter: SystemAudioMuter = SystemAudioMuter()
 
@@ -281,6 +284,53 @@ class AppState: ObservableObject {
         self.deepgramService.onPartialTranscript = { [weak self] text in
             // Service already hops to the main queue.
             self?.liveTranscript = text
+        }
+
+        self.typeOverWatcher.onCorrection = { [weak self] corrected, original in
+            self?.learnWord(corrected, original: original)
+        }
+    }
+
+    // MARK: - Keyword learning (type-over)
+
+    /// Start watching the focused field for a correction of the text just injected.
+    func noteInjection(_ text: String) {
+        typeOverWatcher.watch(injected: text)
+    }
+
+    /// Auto-add a learned spelling to the focus-words dictionary (a spelling lock
+    /// that biases Deepgram next time). `original` is the word that was typed and
+    /// corrected away from: any existing bare focus word that's `original` or a close
+    /// spelling-variant of it is removed first, so successive re-spellings of the same
+    /// word collapse to just the latest rather than accumulating.
+    ///
+    /// Only single bare-word lines are ever removed — "trigger : replacement" entries
+    /// and multi-word phrases are left untouched.
+    func learnWord(_ word: String, original: String) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let term = word.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !term.isEmpty else { return }
+            let originalLC = original.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+            var lines = self.focusWords.isEmpty ? [] : self.focusWords.components(separatedBy: "\n")
+            if !originalLC.isEmpty {
+                lines.removeAll { line in
+                    let w = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !w.isEmpty,
+                          !w.contains(":"), !w.contains(" "), !w.contains("\t"), // bare single word only
+                          w.caseInsensitiveCompare(term) != .orderedSame          // never the word we're adding
+                    else { return false }
+                    let wLC = w.lowercased()
+                    let dist = TypeOverDetector.levenshtein(wLC, originalLC)
+                    return dist <= max(2, max(wLC.count, originalLC.count) / 3)
+                }
+            }
+            let exists = lines.contains {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(term) == .orderedSame
+            }
+            if !exists { lines.append(term) }
+            self.focusWords = lines.joined(separator: "\n")
         }
     }
 
