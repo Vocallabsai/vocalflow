@@ -48,6 +48,8 @@ public sealed class TypeOverWatcher
     private int _polling;           // re-entrancy guard so a slow UIA read can't overlap the next tick
 
     private const int StartDelayMs = 500;      // let the paste settle before snapshotting the baseline
+    private const int BaselineTimeoutMs = 3000; // keep re-reading up to this long for the paste to land
+    private const int BaselinePollMs = 150;    // re-check cadence while waiting for the injected text
     private const int PollMs = 400;            // how often we re-read the field for edits
     private const int SettleMs = 2000;         // idle time before we treat an edit as finished
     private const int WatchMs = 120_000;       // stop watching after two minutes
@@ -73,15 +75,37 @@ public sealed class TypeOverWatcher
         Stop();
         try
         {
-            var el = AutomationElement.FocusedElement;
-            if (el == null) return;
-            if (TryGetText(el) is not string value) return;   // field must expose its text
+            // Snapshot the baseline only once the paste has actually landed. We re-read the focused
+            // field until its text contains the words we injected, which confirms three things at
+            // once: the Ctrl+V completed, focus has settled back on the target (not VocalFlow's own
+            // recording overlay), and we're reading the element we'll go on to watch. A single blind
+            // read at a fixed delay is racy — if it fires a beat early, the baseline is missing the
+            // injected text and every later diff sees those words as "new", so nothing is ever
+            // learned. Best-effort: if the text never matches (e.g. the app doesn't expose it), fall
+            // back to the last readable value so behaviour is no worse than before.
+            AutomationElement? el = null;
+            string? baseline = null;
+            var deadline = Environment.TickCount + BaselineTimeoutMs;
+            while (true)
+            {
+                var focused = SafeFocusedElement();
+                if (focused != null && !IsOwnProcess(focused) && TryGetText(focused) is string text)
+                {
+                    el = focused;
+                    baseline = text;
+                    if (ContainsAll(words, text)) break;   // injection has landed → trustworthy baseline
+                }
+                if (Environment.TickCount >= deadline) break;
+                Thread.Sleep(BaselinePollMs);
+            }
+
+            if (el == null || baseline == null) return;   // never got readable text → nothing to watch
 
             lock (_gate)
             {
                 _element = el;
-                _baseline = value;
-                _lastPolled = value;
+                _baseline = baseline;
+                _lastPolled = baseline;
                 _injectedWords = words;
                 _lastLearned = null;
                 _stopTimer?.Dispose();
@@ -191,6 +215,31 @@ public sealed class TypeOverWatcher
             _injectedWords = new();
             _lastLearned = null;
         }
+    }
+
+    /// <summary>Current focused element, or null if UIA can't resolve one right now.</summary>
+    private static AutomationElement? SafeFocusedElement()
+    {
+        try { return AutomationElement.FocusedElement; }
+        catch (Exception e) { Debug.WriteLine($"[typeover] focused-element read failed: {e.Message}"); return null; }
+    }
+
+    /// <summary>True if the element belongs to our own process (e.g. the recording overlay), which we
+    /// must not mistake for the user's target field while focus is settling.</summary>
+    private static bool IsOwnProcess(AutomationElement el)
+    {
+        try { return el.Current.ProcessId == Environment.ProcessId; }
+        catch { return false; }
+    }
+
+    /// <summary>True if every injected word is present in <paramref name="text"/> (case-insensitive) —
+    /// our signal that the paste has landed in the field we're looking at.</summary>
+    private static bool ContainsAll(HashSet<string> words, string text)
+    {
+        var have = TypeOverDetector.Tokenize(text).Select(w => w.ToLowerInvariant()).ToHashSet();
+        foreach (var w in words)
+            if (!have.Contains(w)) return false;
+        return true;
     }
 
     /// <summary>Read the element's text via ValuePattern, falling back to TextPattern. Null if neither.</summary>
