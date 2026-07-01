@@ -39,6 +39,9 @@ public sealed class AppState : INotifyPropertyChanged
     public DeepgramService DeepgramService { get; } = new();
     public LlmService LlmService { get; } = new();
     public TextInjector TextInjector { get; } = new();
+    /// <summary>Watches for the user typing over a word VocalFlow just injected, and learns the
+    /// corrected spelling into the focus-words dictionary.</summary>
+    public TypeOverWatcher TypeOverWatcher { get; } = new();
     public SystemAudioMuter AudioMuter { get; } = new();
     public SettingsStore Settings { get; } = new();
     public CredentialStore Credentials { get; } = new();
@@ -86,6 +89,53 @@ public sealed class AppState : INotifyPropertyChanged
         _autoUpdateEnabled = Settings.GetString(Keys.AutoUpdateEnabled) != "false";
 
         DeepgramService.OnPartialTranscript = text => OnUi(() => LiveTranscript = text);
+
+        TypeOverWatcher.OnCorrection = (corrected, original) => LearnWord(corrected, original);
+    }
+
+    // MARK: - Keyword learning (type-over)
+
+    /// <summary>Start watching the focused field for a correction of the text just injected.</summary>
+    public void NoteInjection(string text) => TypeOverWatcher.Watch(text);
+
+    /// <summary>
+    /// Auto-add a learned spelling to the focus-words dictionary (a spelling lock that biases Deepgram
+    /// next time). <paramref name="original"/> is the word that was typed and corrected away from: any
+    /// existing bare focus word that's <paramref name="original"/> or a close spelling-variant of it is
+    /// removed first, so successive re-spellings of the same word collapse to just the latest rather
+    /// than accumulating. Only single bare-word lines are ever removed — "trigger : replacement"
+    /// entries and multi-word phrases are left untouched.
+    /// </summary>
+    public void LearnWord(string word, string original)
+    {
+        OnUi(() =>
+        {
+            var term = word.Trim();
+            if (term.Length == 0) return;
+            var originalLC = original.Trim().ToLowerInvariant();
+
+            var lines = string.IsNullOrEmpty(_focusWords)
+                ? new List<string>()
+                : _focusWords.Split('\n').ToList();
+
+            if (originalLC.Length > 0)
+            {
+                lines.RemoveAll(line =>
+                {
+                    var w = line.Trim();
+                    if (w.Length == 0) return false;
+                    if (w.Contains(':') || w.Contains(' ') || w.Contains('\t')) return false; // bare single word only
+                    if (string.Equals(w, term, StringComparison.OrdinalIgnoreCase)) return false; // never the word we're adding
+                    var wLC = w.ToLowerInvariant();
+                    var dist = TypeOverDetector.Levenshtein(wLC, originalLC);
+                    return dist <= Math.Max(2, Math.Max(wLC.Length, originalLC.Length) / 3);
+                });
+            }
+
+            var exists = lines.Any(l => string.Equals(l.Trim(), term, StringComparison.OrdinalIgnoreCase));
+            if (!exists) lines.Add(term);
+            FocusWords = string.Join("\n", lines);
+        });
     }
 
     // MARK: - Volatile UI state

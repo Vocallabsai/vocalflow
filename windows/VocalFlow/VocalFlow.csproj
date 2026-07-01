@@ -19,4 +19,10 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 
+  <!-- TypeOverWatcher reads/observes the focused text field via System.Windows.Automation (the
+       Windows analog of the macOS Accessibility API). UIAutomationClient/UIAutomationTypes ship in
+       the Windows Desktop framework pack already referenced via UseWPF, so no extra reference is
+       needed here. -->
+
+
 </Project>

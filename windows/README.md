@@ -67,6 +67,7 @@ API keys are stored **encrypted with Windows DPAPI** (per-user) under
 | Mic capture → 16 kHz mono PCM16 | `AudioEngine` (AVAudioEngine + AVAudioConverter) | `Services/AudioEngine` (NAudio WASAPI + linear resampler) |
 | Global push-to-talk hotkey | `HotkeyManager` (`NSEvent` monitor) | `Services/HotkeyManager` (`WH_KEYBOARD_LL` hook) |
 | Text injection | `TextInjector` (NSPasteboard + CGEvent Cmd+V) | `Services/TextInjector` (Clipboard + `SendInput` Ctrl+V) |
+| Type-over keyword learning | `TypeOverWatcher` (AX observer on focused element) | `Core/TypeOverWatcher` (UI Automation focus + value/text-changed) |
 | Mute system audio while recording | `SystemAudioMuter` (CoreAudio) | `Services/SystemAudioMuter` (NAudio endpoint mute) |
 | Tray / menu | `MenuBarController` (NSStatusItem) | `UI/TrayController` (WinForms `NotifyIcon`) |
 | Recording overlay | `RecordingOverlayController` + `WaveformOverlayView` | `UI/OverlayWindow` |
@@ -86,6 +87,10 @@ API keys are stored **encrypted with Windows DPAPI** (per-user) under
 - **Feedback sounds** map to Windows system sounds (Asterisk/Beep/Exclamation/Hand/Question).
 - **Key storage is genuinely encrypted** (DPAPI), an upgrade over the macOS app's `KeychainService`,
   which despite its name stored keys in plain `UserDefaults`.
+- **Type-over keyword learning** reads the focused field via **UI Automation** (the Windows analog
+  of the macOS Accessibility API) instead of `AXObserver`. Same caveat: standard Win32 edit fields
+  expose their text well, but browsers/Electron/terminals do so inconsistently, and a non-elevated
+  VocalFlow can't read into an elevated (admin) window (UIPI).
 
 ## Known limitations / TODO
 
