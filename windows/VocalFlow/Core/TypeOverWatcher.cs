@@ -89,9 +89,10 @@ public sealed class TypeOverWatcher
             while (true)
             {
                 var focused = SafeFocusedElement();
-                if (focused != null && !IsOwnProcess(focused) && TryGetText(focused) is string text)
+                if (focused != null && !IsOwnProcess(focused)
+                    && ResolveTextElement(focused) is ({ } resolved, { } text))
                 {
-                    el = focused;
+                    el = resolved;
                     baseline = text;
                     if (ContainsAll(words, text)) break;   // injection has landed → trustworthy baseline
                 }
@@ -215,6 +216,29 @@ public sealed class TypeOverWatcher
             _injectedWords = new();
             _lastLearned = null;
         }
+    }
+
+    /// <summary>
+    /// The element we should read text from for a given focus: the focused element itself if it
+    /// exposes its text, otherwise a direct child that does. Some apps put keyboard focus on a
+    /// container/pane whose editable text actually lives one level down; checking immediate children
+    /// (cheap and bounded) picks those up. We deliberately do NOT search the whole descendant subtree
+    /// — on Chromium/Electron windows that can be enormous and slow, and those apps don't expose
+    /// usable text to UI Automation anyway.
+    /// </summary>
+    private static (AutomationElement Element, string Text)? ResolveTextElement(AutomationElement focused)
+    {
+        if (TryGetText(focused) is string direct) return (focused, direct);
+        try
+        {
+            var condition = new OrCondition(
+                new PropertyCondition(AutomationElement.IsValuePatternAvailableProperty, true),
+                new PropertyCondition(AutomationElement.IsTextPatternAvailableProperty, true));
+            var child = focused.FindFirst(TreeScope.Children, condition);
+            if (child != null && TryGetText(child) is string childText) return (child, childText);
+        }
+        catch (Exception e) { Debug.WriteLine($"[typeover] child text search failed: {e.Message}"); }
+        return null;
     }
 
     /// <summary>Current focused element, or null if UIA can't resolve one right now.</summary>
