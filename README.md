@@ -48,6 +48,8 @@ Audio is streamed in real-time to [Deepgram](https://deepgram.com) for transcrip
   - Grammar correction
   - Code-mix transliteration (Hinglish, Tanglish, Spanglish, and 13 more)
   - Translation to any target language
+- **Focus Words dictionary** — pin the exact spelling of names / jargon (biased into Deepgram as keyterms) plus `trigger : replacement` text expansions
+- **Automatic keyword learning** — type over a dictated word to fix its spelling and VocalFlow remembers it as a Focus Word, so it's transcribed right next time ([exact trigger conditions below](#automatic-keyword-learning-type-over))
 - **Save & Verify** — Save buttons in Settings immediately validate the key against the provider's `/models` endpoint
 - **Surfaced errors** — bad keys, rate limits, and network errors flash on the menu-bar icon and stream to `os_log` (`log stream --predicate 'subsystem == "com.vocalflow.app"' --level debug`)
 - **Works in any app** — text is injected via simulated Cmd+V into Slack, Notion, VS Code, Cursor, ChatGPT, Claude, browser fields, terminals, anything
@@ -55,6 +57,23 @@ Audio is streamed in real-time to [Deepgram](https://deepgram.com) for transcrip
 - **API keys stored in Keychain** — never written to disk in plaintext, never sent to a VocalFlow server (there isn't one)
 - **Live waveform overlay** while recording so you know it's listening
 - **System-audio muting** so your speakers don't bleed into the mic during a meeting
+
+### Automatic keyword learning (type-over)
+
+When you correct the spelling of a word VocalFlow just dictated — by **typing over it** — the corrected spelling is added to your **Focus Words** automatically, so the recognizer spells it right next time. Re-spelling the same word **updates** that entry instead of adding a duplicate.
+
+It's deliberately conservative and only triggers when **all** of these hold:
+
+1. **You just dictated it.** The word you edit must be one VocalFlow typed in that dictation — editing your own pre-existing text is ignored.
+2. **Soon after.** Within ~2 minutes of the dictation (the watch window for that field).
+3. **A single-word swap.** Exactly one word is replaced by exactly one other — not multiple edits, and not inserting or deleting words.
+4. **A spelling variant, not a different word.** The old and new spellings differ by a small edit distance (1 up to ~⅓ of the word's length), and the corrected word is at least 3 characters long.
+5. **Not a common word or homophone.** Everyday words (there/their, your/you're, …) are skipped — this is for names, jargon, and out-of-vocabulary terms.
+6. **You pause (~2 s) after finishing.** It waits until you stop typing, so half-typed spellings (e.g. an in-progress `Aysh`) are never learned.
+7. **A native text field.** It reads the field via macOS Accessibility, which works in TextEdit, Notes, Mail, and most native apps. Browsers, Electron apps (Slack, VS Code, Discord), and terminals often don't expose editable text, so corrections there may not be picked up.
+8. **Accessibility permission is granted** (already required for the hotkey and text injection).
+
+When it fires, the corrected word is added and any older spelling-variants of that same word are removed, leaving a single current entry. Only bare single-word entries are ever auto-removed — your `trigger : replacement` expansions are never touched. It's fully local: VocalFlow only compares against the words it injected and keeps just the correction, never the surrounding text of your documents.
 
 ## Requirements
 
