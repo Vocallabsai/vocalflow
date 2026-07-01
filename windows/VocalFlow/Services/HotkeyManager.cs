@@ -187,6 +187,8 @@ public sealed class HotkeyManager : IDisposable
         _appState.LastTranscript = typed;
         _appState.RecordTranscript(finalTranscript, typed == finalTranscript ? null : typed);
         _appState.TextInjector.Inject(typed);
+        // Watch the focused field: if the user fixes a word's spelling, learn it.
+        _appState.NoteInjection(typed);
         _appState.RecordingState = RecordingState.Idle;
     }
 

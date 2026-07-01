@@ -67,6 +67,7 @@ API keys are stored **encrypted with Windows DPAPI** (per-user) under
 | Mic capture → 16 kHz mono PCM16 | `AudioEngine` (AVAudioEngine + AVAudioConverter) | `Services/AudioEngine` (NAudio WASAPI + linear resampler) |
 | Global push-to-talk hotkey | `HotkeyManager` (`NSEvent` monitor) | `Services/HotkeyManager` (`WH_KEYBOARD_LL` hook) |
 | Text injection | `TextInjector` (NSPasteboard + CGEvent Cmd+V) | `Services/TextInjector` (Clipboard + `SendInput` Ctrl+V) |
+| Type-over keyword learning | `TypeOverWatcher` (AX observer on focused element) | `Core/TypeOverWatcher` (UI Automation; polls focused element's text) |
 | Mute system audio while recording | `SystemAudioMuter` (CoreAudio) | `Services/SystemAudioMuter` (NAudio endpoint mute) |
 | Tray / menu | `MenuBarController` (NSStatusItem) | `UI/TrayController` (WinForms `NotifyIcon`) |
 | Recording overlay | `RecordingOverlayController` + `WaveformOverlayView` | `UI/OverlayWindow` |
@@ -86,6 +87,40 @@ API keys are stored **encrypted with Windows DPAPI** (per-user) under
 - **Feedback sounds** map to Windows system sounds (Asterisk/Beep/Exclamation/Hand/Question).
 - **Key storage is genuinely encrypted** (DPAPI), an upgrade over the macOS app's `KeychainService`,
   which despite its name stored keys in plain `UserDefaults`.
+- **Type-over keyword learning** reads the focused field via **UI Automation** (the Windows analog
+  of the macOS Accessibility API) instead of `AXObserver`, and **polls** the field's text rather than
+  subscribing to change events (UIA change events fire inconsistently across apps). See
+  **Type-over keyword learning: coverage & limits** below.
+
+## Type-over keyword learning: coverage & limits
+
+After VocalFlow injects dictated text, it briefly watches the focused field; if you edit a word it
+just typed into a close spelling variant (e.g. `Jon` → `John`), the corrected spelling is auto-added
+to your **Focus Words** as a spelling lock (which biases Deepgram toward it next time). Re-spelling
+the same word updates that entry in place rather than piling up duplicates.
+
+**Where it works.** Anywhere the focused control exposes its text to **UI Automation** — Notepad,
+WordPad, standard Win32 edit boxes, most WinUI / WPF / WinForms apps, and many native editors. Focus
+is resolved to the text control itself or, if the app focuses a container, its immediate child.
+
+**Where it does *not* work (platform limits, not bugs).**
+- **Chromium / Electron apps** — Chrome, Edge, VS Code, Slack, Discord, Teams and other web-view UIs
+  render their own text and don't expose it usably to UI Automation.
+- **Terminals** and **custom-drawn / canvas editors** — their text isn't published to UIA.
+- **Elevated (admin) windows** — a normally-run VocalFlow can't read into a process running as
+  administrator (Windows UIPI). Only run VocalFlow elevated if you specifically need this.
+- This is the same class of limitation as the macOS version, which likewise depends on the
+  accessibility layer.
+
+**Behavioral notes.**
+- **~2 s settle** — it learns only after you pause editing for about two seconds, so a half-typed
+  word (e.g. `Joh`) is never learned.
+- **One correction per dictation** — the baseline is captured per injection, so it learns a single
+  word swap from each dictated snippet.
+- **Conservative on purpose** — only single-word swaps within a small edit distance, length ≥ 3, and
+  excluding everyday/common words are learned, to keep Focus Words clean.
+- **Privacy** — it only diffs against the words it injected and keeps just the wrong → right pair; it
+  never stores or transmits the surrounding field text.
 
 ## Known limitations / TODO
 
