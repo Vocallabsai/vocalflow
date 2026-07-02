@@ -20,6 +20,11 @@ final class OnboardingViewModel: ObservableObject {
     @Published var micGranted = false
     @Published var axGranted = false
 
+    /// Fired when a permission newly flips to granted — the controller uses it to
+    /// bring the onboarding window back to the front (the user was just in System
+    /// Settings, and this is an accessory app with no Dock icon to click back to).
+    var onGrantDetected: (() -> Void)?
+
     private let appState: AppState
     private let onReady: () -> Void
     private var readyFired = false
@@ -47,9 +52,11 @@ final class OnboardingViewModel: ObservableObject {
     func stopPolling() { pollTimer?.invalidate(); pollTimer = nil }
 
     func refresh() {
+        let wasMic = micGranted, wasAx = axGranted
         micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         axGranted = AXIsProcessTrusted()
         if !appState.deepgramAPIKey.isEmpty, keyStatus == .none { keyStatus = .saved }
+        if (!wasMic && micGranted) || (!wasAx && axGranted) { onGrantDetected?() }
         if axGranted { fireReady() }
     }
 
@@ -255,6 +262,7 @@ class WelcomeWindowController {
         if window == nil {
             let vm = OnboardingViewModel(appState: appState, onReady: onReady)
             self.vm = vm
+            vm.onGrantDetected = { [weak self] in self?.refocus() }
             let view = OnboardingView(
                 vm: vm,
                 onOpenSettings: { [weak self] in self?.onOpenSettings() },
@@ -281,6 +289,13 @@ class WelcomeWindowController {
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         Self.markShown()
+    }
+
+    /// Bring the onboarding window back to the front (e.g. after the user granted a
+    /// permission in System Settings) so they return to it, not a lost window.
+    private func refocus() {
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func dismiss() {
