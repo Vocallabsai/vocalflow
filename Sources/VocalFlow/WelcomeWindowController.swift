@@ -4,8 +4,6 @@ import AVFoundation
 import ApplicationServices
 import Combine
 
-private let welcomeShownKey = "welcome_shown_v1"
-
 // MARK: - Onboarding state
 
 /// Drives the first-run setup: tracks the Deepgram key + Microphone + Accessibility
@@ -250,13 +248,13 @@ class WelcomeWindowController {
         self.onReady = onReady
     }
 
+    /// Show the guided setup whenever the app isn't usable yet — i.e. there's no
+    /// Deepgram key saved. It reappears on each launch until setup is complete;
+    /// "Finish later" only dismisses it for the current session. Once a key is
+    /// saved it never shows again (so configured/existing users never see it).
     static func shouldShow(deepgramKey: String) -> Bool {
-        if UserDefaults.standard.bool(forKey: welcomeShownKey) { return false }
-        // Don't pester existing users who already configured the app on a prior version.
         return deepgramKey.isEmpty
     }
-
-    static func markShown() { UserDefaults.standard.set(true, forKey: welcomeShownKey) }
 
     func show() {
         if window == nil {
@@ -288,7 +286,6 @@ class WelcomeWindowController {
         window?.center()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        Self.markShown()
     }
 
     /// Bring the onboarding window back to the front (e.g. after the user granted a
