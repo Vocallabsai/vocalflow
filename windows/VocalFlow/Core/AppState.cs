@@ -31,6 +31,7 @@ public sealed class AppState : INotifyPropertyChanged
         public const string SelectedAudioDeviceUid = "selected_audio_device_uid";
         public const string CustomSystemPrompt = "custom_system_prompt";
         public const string FocusWords = "focus_words";
+        public const string FavoriteFocusWords = "favorite_focus_words";
         public const string AutoUpdateEnabled = "auto_update_enabled";
     }
 
@@ -83,6 +84,9 @@ public sealed class AppState : INotifyPropertyChanged
         _feedbackSoundName = Settings.GetString(Keys.FeedbackSoundName) ?? "Asterisk";
         _customSystemPrompt = Settings.GetString(Keys.CustomSystemPrompt) ?? "";
         _focusWords = Settings.GetString(Keys.FocusWords) ?? "";
+        _favoriteFocusWords = new HashSet<string>(
+            (Settings.GetString(Keys.FavoriteFocusWords) ?? "")
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         _selectedAudioDeviceUid = Settings.GetString(Keys.SelectedAudioDeviceUid) ?? "";
 
         // Auto-update defaults ON; only an explicit "false" disables it.
@@ -315,6 +319,25 @@ public sealed class AppState : INotifyPropertyChanged
 
     /// <summary>Parsed, de-duplicated focus-word trigger keys. Drives the Deepgram keyterm query.</summary>
     public IReadOnlyList<string> FocusWordTerms => FocusWordsDictionary.Keys(_focusWords);
+
+    private HashSet<string> _favoriteFocusWords;
+    /// <summary>
+    /// Lowercased dictionary keys the user starred in the Dictionary tab. Purely a UI pin (favorites
+    /// sort to the top of the entry list) — has no effect on recognition. Mirrors the macOS
+    /// favorite_focus_words set.
+    /// </summary>
+    public IReadOnlySet<string> FavoriteFocusWords => _favoriteFocusWords;
+
+    public bool IsFavoriteFocusWord(string key) => _favoriteFocusWords.Contains(key.ToLowerInvariant());
+
+    public void SetFavoriteFocusWord(string key, bool favorite)
+    {
+        var k = key.ToLowerInvariant();
+        bool changed = favorite ? _favoriteFocusWords.Add(k) : _favoriteFocusWords.Remove(k);
+        if (!changed) return;
+        Settings.SetString(Keys.FavoriteFocusWords, string.Join("\n", _favoriteFocusWords));
+        OnPropertyChanged(nameof(FavoriteFocusWords));
+    }
 
     private string _selectedAudioDeviceUid;
     public string SelectedAudioDeviceUid

@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media.Animation;
 using System.Windows.Navigation;
 using VocalFlow.Core;
 using VocalFlow.Services;
@@ -11,15 +13,36 @@ using Brush = System.Windows.Media.Brush;
 namespace VocalFlow.UI;
 
 /// <summary>
-/// The settings window. Port of the macOS SettingsView (SwiftUI Form -> WPF). Simple toggles and
-/// the custom-prompt field are data-bound to AppState; combos, key fields, and the async model
-/// fetches are driven imperatively from here.
+/// The settings window: a sidebar of section pills on the left, one page of cards on the right.
+/// Port of the macOS SettingsView (SwiftUI sidebar + paged sections -> WPF). Simple toggles and
+/// the custom-prompt field are data-bound to AppState; combos, key fields, the async model
+/// fetches, and the Dictionary entry list are driven imperatively from here.
 /// </summary>
 public partial class SettingsWindow : Window
 {
     private readonly AppState _appState;
     private readonly UpdaterManager _updater;
     private bool _loading;
+    private bool _deepgramKeyVisible;
+    private bool _llmKeyVisible;
+
+    // Sidebar navigation model: each section is one page. Mirrors the macOS SettingsSection.
+    private enum Section { Dictation, Transcription, AiPolish, Corrections, Dictionary, Permissions, About }
+
+    private sealed record SectionInfo(string Title, string Subtitle, string Glyph, string ChipBrushKey);
+
+    private static readonly Dictionary<Section, SectionInfo> Sections = new()
+    {
+        [Section.Dictation] = new("Dictation", "Hotkey, feedback sound & microphone", "", "ChipVioletBrush"),
+        [Section.Transcription] = new("Transcription", "Deepgram speech-to-text engine", "", "ChipBlueBrush"),
+        [Section.AiPolish] = new("AI Polish", "LLM cleanup applied after transcription", "", "ChipMagentaBrush"),
+        [Section.Corrections] = new("Corrections", "Spelling, grammar, code-mix & translation", "", "ChipEmeraldBrush"),
+        [Section.Dictionary] = new("Dictionary", "Exact spellings & spoken text expansions", "", "ChipAmberBrush"),
+        [Section.Permissions] = new("Permissions", "System access VocalFlow needs to work", "", "ChipRedBrush"),
+        [Section.About] = new("About", "Version & software updates", "", "ChipSlateBrush"),
+    };
+
+    private Section _section = Section.Dictation;
 
     private static readonly (string Name, string Description)[] CodeMixOptions =
     {
@@ -101,10 +124,15 @@ public partial class SettingsWindow : Window
         RebuildModelCombo();
         RebuildLlmModelCombo();
 
-        VersionText.Text = $"Version {Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?"}";
+        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?";
+        VersionText.Text = version;
+        SidebarVersion.Text = $"Version {version}";
+
+        RebuildDictList();
 
         _loading = false;
 
+        ApplySection(animated: false);
         RebuildMicCombo();
         _appState.RefreshAudioDevices();
         UpdateLlmDependentState();
@@ -120,13 +148,69 @@ public partial class SettingsWindow : Window
     {
         if (e.PropertyName == nameof(AppState.AvailableAudioDevices))
             RebuildMicCombo();
+        else if (e.PropertyName == nameof(AppState.FocusWords))
+            RebuildDictList(); // e.g. type-over auto-learn appended a word while the window is open
+    }
+
+    // MARK: - Sidebar navigation / paging
+
+    private void OnNavChecked(object sender, RoutedEventArgs e)
+    {
+        if (!IsInitialized || _loading) return;
+        var section = sender switch
+        {
+            _ when ReferenceEquals(sender, NavDictation) => Section.Dictation,
+            _ when ReferenceEquals(sender, NavTranscription) => Section.Transcription,
+            _ when ReferenceEquals(sender, NavAiPolish) => Section.AiPolish,
+            _ when ReferenceEquals(sender, NavCorrections) => Section.Corrections,
+            _ when ReferenceEquals(sender, NavDictionary) => Section.Dictionary,
+            _ when ReferenceEquals(sender, NavPermissions) => Section.Permissions,
+            _ => Section.About,
+        };
+        if (section == _section) return;
+        _section = section;
+        ApplySection(animated: true);
+    }
+
+    private FrameworkElement PageFor(Section s) => s switch
+    {
+        Section.Dictation => PageDictation,
+        Section.Transcription => PageTranscription,
+        Section.AiPolish => PageAiPolish,
+        Section.Corrections => PageCorrections,
+        Section.Dictionary => PageDictionary,
+        Section.Permissions => PagePermissions,
+        _ => PageAbout,
+    };
+
+    /// <summary>Retarget the page header, show only the active page, and crossfade it in.</summary>
+    private void ApplySection(bool animated)
+    {
+        var info = Sections[_section];
+        HeaderTitle.Text = info.Title;
+        HeaderSubtitle.Text = info.Subtitle;
+        HeaderGlyph.Text = info.Glyph;
+        var chip = (Brush)FindResource(info.ChipBrushKey);
+        HeaderChip.Background = chip;
+        if (chip is System.Windows.Media.SolidColorBrush solid)
+            HeaderChipGlow.Color = solid.Color;
+
+        foreach (Section s in Enum.GetValues<Section>())
+            PageFor(s).Visibility = s == _section ? Visibility.Visible : Visibility.Collapsed;
+
+        PageScroll.ScrollToTop();
+        if (animated)
+            PageHost.BeginAnimation(OpacityProperty,
+                new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150)));
     }
 
     // MARK: - Deepgram
 
     private void OnToggleDeepgramShow(object sender, RoutedEventArgs e)
     {
-        if (DeepgramShow.IsChecked == true)
+        _deepgramKeyVisible = !_deepgramKeyVisible;
+        DeepgramShowBtn.Content = _deepgramKeyVisible ? "Hide" : "Show";
+        if (_deepgramKeyVisible)
         {
             DeepgramKeyText.Text = DeepgramKeyBox.Password;
             DeepgramKeyText.Visibility = Visibility.Visible;
@@ -140,20 +224,24 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private string ReadDeepgramKey() =>
-        DeepgramShow.IsChecked == true ? DeepgramKeyText.Text : DeepgramKeyBox.Password;
+    private string ReadDeepgramKey() => _deepgramKeyVisible ? DeepgramKeyText.Text : DeepgramKeyBox.Password;
 
     private void SetDeepgramKey(string value)
     {
         DeepgramKeyBox.Password = value;
         DeepgramKeyText.Text = value;
+        DeepgramSaveBtn.IsEnabled = value.Length > 0;
     }
+
+    private void OnDeepgramKeyEdited(object sender, RoutedEventArgs e)
+        => DeepgramSaveBtn.IsEnabled = ReadDeepgramKey().Length > 0;
 
     private async void OnSaveDeepgram(object sender, RoutedEventArgs e)
     {
         var key = ReadDeepgramKey();
         _appState.Credentials.Store("deepgram_api_key", key);
         _appState.DeepgramApiKey = key;
+        RebuildModelCombo(); // key presence toggles the model rows
         SetStatus(DeepgramStatus, "Verifying…", null);
         bool ok = await FetchDeepgramModelsAsync();
         SetStatus(DeepgramStatus, ok ? "Saved & verified ✓" : "Saved (verification failed)", ok);
@@ -205,6 +293,12 @@ public partial class SettingsWindow : Window
             DeepgramFetchBtn.Content = "Refresh";
         }
         ModelCombo.Text = _appState.SelectedModel;
+
+        // Hide the model/language rows until there's a key (or fetched models) to pick from.
+        bool showModelArea = _appState.AvailableModels.Count > 0 || !string.IsNullOrEmpty(_appState.DeepgramApiKey);
+        DeepgramModelDivider.Visibility = showModelArea ? Visibility.Visible : Visibility.Collapsed;
+        ModelPanel.Visibility = showModelArea ? Visibility.Visible : Visibility.Collapsed;
+
         RebuildLanguageCombo();
         _loading = false;
     }
@@ -213,7 +307,7 @@ public partial class SettingsWindow : Window
     {
         var langs = _appState.AvailableModels.FirstOrDefault(m => m.CanonicalName == _appState.SelectedModel)?.Languages
                     ?? Array.Empty<string>();
-        if (langs.Count > 0)
+        if (langs.Count > 0 && ModelPanel.Visibility == Visibility.Visible)
         {
             LanguagePanel.Visibility = Visibility.Visible;
             LanguageCombo.ItemsSource = langs.Select(l => l == "multi" ? "multi (Code-switching)" : l).ToList();
@@ -294,6 +388,7 @@ public partial class SettingsWindow : Window
         };
         LlmKeyBox.Password = key;
         LlmKeyText.Text = key;
+        LlmSaveBtn.IsEnabled = key.Length > 0;
         LlmKeyHyperlink.NavigateUri = new Uri(_appState.SelectedLlmProvider.SignupUrl());
         LlmKeyHyperlink.Inlines.Clear();
         LlmKeyHyperlink.Inlines.Add($"Get a {_appState.SelectedLlmProvider.DisplayName()} key →");
@@ -301,7 +396,9 @@ public partial class SettingsWindow : Window
 
     private void OnToggleLlmShow(object sender, RoutedEventArgs e)
     {
-        if (LlmShow.IsChecked == true)
+        _llmKeyVisible = !_llmKeyVisible;
+        LlmShowBtn.Content = _llmKeyVisible ? "Hide" : "Show";
+        if (_llmKeyVisible)
         {
             LlmKeyText.Text = LlmKeyBox.Password;
             LlmKeyText.Visibility = Visibility.Visible;
@@ -315,7 +412,10 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private string ReadLlmKey() => LlmShow.IsChecked == true ? LlmKeyText.Text : LlmKeyBox.Password;
+    private string ReadLlmKey() => _llmKeyVisible ? LlmKeyText.Text : LlmKeyBox.Password;
+
+    private void OnLlmKeyEdited(object sender, RoutedEventArgs e)
+        => LlmSaveBtn.IsEnabled = ReadLlmKey().Length > 0;
 
     private async void OnSaveLlm(object sender, RoutedEventArgs e)
     {
@@ -382,6 +482,7 @@ public partial class SettingsWindow : Window
         var models = CurrentProviderModels();
         if (models.Count > 0)
         {
+            LlmModelDivider.Visibility = Visibility.Visible;
             LlmModelPanel.Visibility = Visibility.Visible;
             LlmModelCombo.ItemsSource = models.Select(m => m.DisplayName).ToList();
             var selectedId = _appState.CurrentLlmModel;
@@ -391,6 +492,7 @@ public partial class SettingsWindow : Window
         }
         else
         {
+            LlmModelDivider.Visibility = Visibility.Collapsed;
             LlmModelPanel.Visibility = Visibility.Collapsed;
             LlmFetchBtn.Content = "Fetch Models";
         }
@@ -440,6 +542,143 @@ public partial class SettingsWindow : Window
     {
         if (_loading || TargetCombo.SelectedItem is not string lang) return;
         _appState.SelectedTargetLanguage = lang;
+    }
+
+    // MARK: - Dictionary (a managed view over the focus-words string)
+
+    /// <summary>One row of the Dictionary entry list. Rebuilt wholesale on every change.</summary>
+    public sealed class DictRow
+    {
+        public required DictionaryEntry Entry { get; init; }
+        public required bool IsFavorite { get; init; }
+        public required bool IsEditing { get; init; }
+        public required bool ShowDivider { get; init; }
+        public string Key => Entry.Key;
+        /// <summary>Second line for expansions; empty (hidden) for plain spelling entries.</summary>
+        public string Expansion => Entry.Value == Entry.Key ? "" : $"→ {Entry.Value}";
+    }
+
+    /// <summary>Original key of the entry being edited; null = the form adds a new entry.</summary>
+    private string? _editingKey;
+
+    private IReadOnlyList<DictionaryEntry> DictionaryEntries => FocusWordsDictionary.ParseEntries(_appState.FocusWords);
+
+    /// <summary>
+    /// Serialize back to the newline "key : value" format FocusWordsDictionary parses (and the
+    /// type-over auto-learn appends to). Plain entries (value == key) serialize as just the key.
+    /// </summary>
+    private void SaveDictEntries(IEnumerable<DictionaryEntry> entries)
+    {
+        _appState.FocusWords = string.Join("\n",
+            entries.Select(en => en.Key == en.Value ? en.Key : $"{en.Key} : {en.Value}"));
+    }
+
+    private void RebuildDictList()
+    {
+        var all = DictionaryEntries;
+        // Favorites pinned first; original order preserved within each group.
+        var displayed = all.Where(en => _appState.IsFavoriteFocusWord(en.Key))
+            .Concat(all.Where(en => !_appState.IsFavoriteFocusWord(en.Key)))
+            .ToList();
+
+        DictListTitle.Text = $"Entries ({all.Count})";
+        DictEmptyText.Visibility = all.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        DictList.ItemsSource = displayed.Select((en, i) => new DictRow
+        {
+            Entry = en,
+            IsFavorite = _appState.IsFavoriteFocusWord(en.Key),
+            IsEditing = _editingKey == en.Key,
+            ShowDivider = i > 0,
+        }).ToList();
+    }
+
+    private void OnDictFormChanged(object sender, TextChangedEventArgs e)
+        => DictCommitBtn.IsEnabled = DictWordBox.Text.Trim().Length > 0;
+
+    private void OnDictFormKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        CommitDictEntry();
+        e.Handled = true;
+    }
+
+    private void OnDictCommit(object sender, RoutedEventArgs e) => CommitDictEntry();
+
+    private void CommitDictEntry()
+    {
+        var trigger = DictWordBox.Text.Trim();
+        var repl = DictReplacementBox.Text.Trim();
+        if (trigger.Length == 0) return;
+        var entry = new DictionaryEntry(trigger, repl.Length == 0 ? trigger : repl);
+
+        var entries = DictionaryEntries.ToList();
+        int editIdx = _editingKey == null ? -1 : entries.FindIndex(en => en.Key == _editingKey);
+        if (editIdx >= 0)
+        {
+            // Carry a favorite across a rename.
+            if (_editingKey != null && _appState.IsFavoriteFocusWord(_editingKey) &&
+                !string.Equals(_editingKey, trigger, StringComparison.OrdinalIgnoreCase))
+            {
+                _appState.SetFavoriteFocusWord(_editingKey, false);
+                _appState.SetFavoriteFocusWord(trigger, true);
+            }
+            entries[editIdx] = entry;
+        }
+        else
+        {
+            int existing = entries.FindIndex(en => string.Equals(en.Key, trigger, StringComparison.OrdinalIgnoreCase));
+            if (existing >= 0) entries[existing] = entry; // re-adding an existing trigger updates it
+            else entries.Add(entry);
+        }
+        ResetDictForm();
+        SaveDictEntries(entries); // triggers RebuildDictList via the FocusWords property change
+        DictWordBox.Focus();
+    }
+
+    private void OnDictCancelEdit(object sender, RoutedEventArgs e)
+    {
+        ResetDictForm();
+        RebuildDictList(); // drop the row's editing highlight
+    }
+
+    private void ResetDictForm()
+    {
+        _editingKey = null;
+        DictWordBox.Text = "";
+        DictReplacementBox.Text = "";
+        DictFormTitle.Text = "Add Entry";
+        DictCommitBtn.Content = "Add to Dictionary";
+        DictCancelBtn.Visibility = Visibility.Collapsed;
+    }
+
+    private static DictRow? RowOf(object sender) => (sender as FrameworkElement)?.DataContext as DictRow;
+
+    private void OnDictFavorite(object sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is not { } row) return;
+        _appState.SetFavoriteFocusWord(row.Key, !row.IsFavorite);
+        RebuildDictList();
+    }
+
+    private void OnDictEdit(object sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is not { } row) return;
+        _editingKey = row.Key;
+        DictWordBox.Text = row.Entry.Key;
+        DictReplacementBox.Text = row.Entry.Value == row.Entry.Key ? "" : row.Entry.Value;
+        DictFormTitle.Text = $"Edit “{row.Key}”";
+        DictCommitBtn.Content = "Save Changes";
+        DictCancelBtn.Visibility = Visibility.Visible;
+        RebuildDictList(); // highlight the row being edited
+        DictWordBox.Focus();
+    }
+
+    private void OnDictDelete(object sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is not { } row) return;
+        if (_editingKey == row.Key) ResetDictForm();
+        _appState.SetFavoriteFocusWord(row.Key, false);
+        SaveDictEntries(DictionaryEntries.Where(en => en.Key != row.Key));
     }
 
     // MARK: - Microphone
@@ -494,6 +733,14 @@ public partial class SettingsWindow : Window
         var value = name == "None (muted)" ? "" : name;
         _appState.FeedbackSoundName = value;
         if (!string.IsNullOrEmpty(value)) FeedbackSound.Play(value);
+    }
+
+    // MARK: - Permissions
+
+    private void OnOpenMicPrivacy(object sender, RoutedEventArgs e)
+    {
+        try { Process.Start(new ProcessStartInfo("ms-settings:privacy-microphone") { UseShellExecute = true }); }
+        catch { }
     }
 
     // MARK: - Updates
