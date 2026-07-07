@@ -45,7 +45,12 @@ public partial class App : Application
         _hotkeyManager.StartListening();
         _updater.Start();
 
-        if (WelcomeWindow.ShouldShow(state))
+        if (e.Args.Contains("--settings"))
+        {
+            // Dev / power-user affordance: jump straight to the settings window.
+            _tray.ShowSettings();
+        }
+        else if (WelcomeWindow.ShouldShow(state))
         {
             _welcome = new WelcomeWindow(state, onOpenSettings: () => _tray.ShowSettings());
             _welcome.Show();

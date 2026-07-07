@@ -1,232 +1,593 @@
 <Window x:Class="VocalFlow.UI.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="clr-namespace:VocalFlow.UI"
         Title="VocalFlow Settings"
-        Width="500" Height="680"
+        Width="760" Height="580"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource WindowBgBrush}"
         FontFamily="{StaticResource AppFont}"
         ResizeMode="NoResize">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <!-- Watermark hint over an empty TextBox (WPF has no built-in placeholder). -->
+        <Style x:Key="Placeholder" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource AppFont}" />
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="Opacity" Value="0.6" />
+            <Setter Property="Margin" Value="10,0,0,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
     </Window.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16"
-                  Style="{StaticResource AutoHideScrollViewer}">
-        <StackPanel>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="208" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-            <!-- Transcription (Deepgram) -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
-                    <DockPanel>
-                        <Button x:Name="DeepgramFetchBtn" DockPanel.Dock="Right" Content="Fetch Models"
-                                Padding="8,2" Click="OnFetchDeepgramModels" />
-                        <TextBlock Text="Transcription (Deepgram)" Style="{StaticResource SectionHeader}" />
-                    </DockPanel>
+        <!-- ======================= Sidebar ======================= -->
+        <Border Grid.Column="0" Background="{StaticResource SidebarBgBrush}"
+                BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="0,0,1,0">
+            <DockPanel Margin="10,16,10,14">
+                <TextBlock x:Name="SidebarVersion" DockPanel.Dock="Bottom" FontSize="10"
+                           Foreground="{StaticResource TextSecondaryBrush}" Opacity="0.7"
+                           Margin="10,10,0,0" />
 
-                    <Grid Margin="0,4,0,0">
-                        <PasswordBox x:Name="DeepgramKeyBox" />
-                        <TextBox x:Name="DeepgramKeyText" Visibility="Collapsed" />
-                    </Grid>
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button x:Name="DeepgramSaveBtn" Content="Save &amp; Verify" Padding="14,5"
-                                Style="{StaticResource AccentButton}" Click="OnSaveDeepgram" />
-                        <CheckBox x:Name="DeepgramShow" Content="Show" VerticalAlignment="Center" Margin="10,0,0,0"
-                                  Checked="OnToggleDeepgramShow" Unchecked="OnToggleDeepgramShow" />
-                        <TextBlock x:Name="DeepgramStatus" VerticalAlignment="Center" Margin="10,0,0,0" FontSize="11" />
-                        <TextBlock VerticalAlignment="Center" Margin="14,0,0,0" FontSize="11">
-                            <Hyperlink NavigateUri="https://console.deepgram.com/signup" RequestNavigate="OnNavigate">Get an API key →</Hyperlink>
-                        </TextBlock>
+                <StackPanel DockPanel.Dock="Top">
+                    <!-- Brand header -->
+                    <StackPanel Orientation="Horizontal" Margin="10,0,0,16">
+                        <Border Width="25" Height="25" CornerRadius="7"
+                                Background="{StaticResource AccentGradientBrush}">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#8400FF" Opacity="0.5" BlurRadius="10"
+                                                  ShadowDepth="1" Direction="270" />
+                            </Border.Effect>
+                            <TextBlock Text="&#xE720;" FontFamily="{StaticResource GlyphFont}"
+                                       FontSize="12" FontWeight="Bold" Foreground="White"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Margin="9,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="VocalFlow" FontSize="14" FontWeight="Bold" />
+                            <TextBlock Text="Settings" FontSize="10"
+                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                        </StackPanel>
                     </StackPanel>
 
-                    <Grid Margin="0,12,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Model" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <ComboBox x:Name="ModelCombo" Grid.Column="1" IsEditable="True"
-                                  SelectionChanged="OnModelChanged" LostFocus="OnModelTextCommitted" />
-                    </Grid>
-                    <Grid x:Name="LanguagePanel" Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Language" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <ComboBox x:Name="LanguageCombo" Grid.Column="1" SelectionChanged="OnLanguageChanged" />
-                    </Grid>
-                    <TextBlock x:Name="DeepgramError" Foreground="{StaticResource ErrorBrush}" FontSize="11" Margin="0,6,0,0"
-                               TextWrapping="Wrap" Visibility="Collapsed" />
+                    <!-- Navigation -->
+                    <RadioButton x:Name="NavDictation" Style="{StaticResource NavItem}" Content="Dictation"
+                                 Tag="{StaticResource ChipVioletBrush}" ui:NavProps.Glyph="&#xE720;"
+                                 IsChecked="True" Checked="OnNavChecked" />
+                    <RadioButton x:Name="NavTranscription" Style="{StaticResource NavItem}" Content="Transcription"
+                                 Tag="{StaticResource ChipBlueBrush}" ui:NavProps.Glyph="&#xE8BD;"
+                                 Checked="OnNavChecked" />
+                    <RadioButton x:Name="NavAiPolish" Style="{StaticResource NavItem}" Content="AI Polish"
+                                 Tag="{StaticResource ChipMagentaBrush}" ui:NavProps.Glyph="&#xE945;"
+                                 Checked="OnNavChecked" />
+                    <RadioButton x:Name="NavCorrections" Style="{StaticResource NavItem}" Content="Corrections"
+                                 Tag="{StaticResource ChipEmeraldBrush}" ui:NavProps.Glyph="&#xE73E;"
+                                 Checked="OnNavChecked" />
+                    <RadioButton x:Name="NavDictionary" Style="{StaticResource NavItem}" Content="Dictionary"
+                                 Tag="{StaticResource ChipAmberBrush}" ui:NavProps.Glyph="&#xE82D;"
+                                 Checked="OnNavChecked" />
+                    <RadioButton x:Name="NavPermissions" Style="{StaticResource NavItem}" Content="Permissions"
+                                 Tag="{StaticResource ChipRedBrush}" ui:NavProps.Glyph="&#xE72E;"
+                                 Checked="OnNavChecked" />
+                    <RadioButton x:Name="NavAbout" Style="{StaticResource NavItem}" Content="About"
+                                 Tag="{StaticResource ChipSlateBrush}" ui:NavProps.Glyph="&#xE946;"
+                                 Checked="OnNavChecked" />
                 </StackPanel>
-            </Border>
+            </DockPanel>
+        </Border>
 
-            <!-- LLM Post-Processing -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
-                    <DockPanel>
-                        <Button x:Name="LlmFetchBtn" DockPanel.Dock="Right" Content="Fetch Models"
-                                Padding="8,2" Click="OnFetchLlmModels" />
-                        <TextBlock Text="LLM Post-Processing" Style="{StaticResource SectionHeader}" />
-                    </DockPanel>
+        <!-- ======================= Content ======================= -->
+        <Grid Grid.Column="1">
+            <!-- Soft accent glow bleeding in from the top-right gives the pane depth. -->
+            <Ellipse Width="380" Height="380" HorizontalAlignment="Right" VerticalAlignment="Top"
+                     Margin="0,-150,-110,0" IsHitTestVisible="False">
+                <Ellipse.Fill>
+                    <RadialGradientBrush>
+                        <GradientStop Color="#268400FF" Offset="0" />
+                        <GradientStop Color="#128400FF" Offset="0.55" />
+                        <GradientStop Color="#008400FF" Offset="1" />
+                    </RadialGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
 
-                    <Grid Margin="0,4,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Provider" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <ComboBox x:Name="ProviderCombo" Grid.Column="1" SelectionChanged="OnProviderChanged" />
-                    </Grid>
+            <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto"
+                          Style="{StaticResource AutoHideScrollViewer}" Padding="20,24,20,8">
+                <StackPanel x:Name="PageHost">
 
-                    <Grid Margin="0,8,0,0">
-                        <PasswordBox x:Name="LlmKeyBox" />
-                        <TextBox x:Name="LlmKeyText" Visibility="Collapsed" />
-                    </Grid>
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button x:Name="LlmSaveBtn" Content="Save &amp; Verify" Padding="14,5"
-                                Style="{StaticResource AccentButton}" Click="OnSaveLlm" />
-                        <CheckBox x:Name="LlmShow" Content="Show" VerticalAlignment="Center" Margin="10,0,0,0"
-                                  Checked="OnToggleLlmShow" Unchecked="OnToggleLlmShow" />
-                        <TextBlock x:Name="LlmStatus" VerticalAlignment="Center" Margin="10,0,0,0" FontSize="11" />
-                        <TextBlock x:Name="LlmKeyLink" VerticalAlignment="Center" Margin="14,0,0,0" FontSize="11">
-                            <Hyperlink x:Name="LlmKeyHyperlink" RequestNavigate="OnNavigate">Get a key →</Hyperlink>
-                        </TextBlock>
+                    <!-- Page header (chip + title + subtitle), retargeted per section from code. -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                        <Border x:Name="HeaderChip" Width="30" Height="30" CornerRadius="8"
+                                VerticalAlignment="Center">
+                            <Border.Effect>
+                                <DropShadowEffect x:Name="HeaderChipGlow" Color="#8B5CF6" Opacity="0.45"
+                                                  BlurRadius="10" ShadowDepth="2" Direction="270" />
+                            </Border.Effect>
+                            <TextBlock x:Name="HeaderGlyph" FontFamily="{StaticResource GlyphFont}"
+                                       FontSize="14" Foreground="White"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Margin="11,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="HeaderTitle" FontSize="19" FontWeight="Bold" />
+                            <TextBlock x:Name="HeaderSubtitle" FontSize="11"
+                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                        </StackPanel>
                     </StackPanel>
 
-                    <Grid x:Name="LlmModelPanel" Margin="0,12,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Model" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <ComboBox x:Name="LlmModelCombo" Grid.Column="1" SelectionChanged="OnLlmModelChanged" />
-                    </Grid>
-                    <TextBlock x:Name="LlmError" Foreground="{StaticResource ErrorBrush}" FontSize="11" Margin="0,6,0,0"
-                               TextWrapping="Wrap" Visibility="Collapsed" />
-                </StackPanel>
-            </Border>
+                    <!-- ============ Page: Dictation ============ -->
+                    <StackPanel x:Name="PageDictation">
+                        <ContentControl Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <TextBlock Text="Hotkey" Style="{StaticResource SectionHeader}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Trigger key" VerticalAlignment="Center" />
+                                    <ComboBox x:Name="HotkeyCombo" Grid.Column="1" MinWidth="160" MaxWidth="300"
+                                              SelectionChanged="OnHotkeyChanged" />
+                                </Grid>
+                                <TextBlock Style="{StaticResource Caption}"
+                                           Text="Hold the selected key to record, release to transcribe. Press Esc while recording to cancel." />
+                                <Border Style="{StaticResource InlineDivider}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Feedback sound" VerticalAlignment="Center" />
+                                    <ComboBox x:Name="FeedbackCombo" Grid.Column="1" MinWidth="160" MaxWidth="300"
+                                              SelectionChanged="OnFeedbackChanged" />
+                                </Grid>
+                            </StackPanel>
+                        </ContentControl>
 
-            <!-- Corrections & Features -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel x:Name="CorrectionsSection">
-                    <TextBlock Text="Corrections &amp; Features" Style="{StaticResource SectionHeader}" />
-                    <TextBlock x:Name="CorrectionsHint" Style="{StaticResource Caption}"
-                               Text="Configure an LLM provider above to enable these features." />
-                    <CheckBox x:Name="SpellingToggle" Content="Spelling Correction" Margin="0,8,0,0"
-                              IsChecked="{Binding CorrectionModeEnabled, Mode=TwoWay}" />
-                    <CheckBox x:Name="GrammarToggle" Content="Grammar Correction" Margin="0,6,0,0"
-                              IsChecked="{Binding GrammarCorrectionEnabled, Mode=TwoWay}" />
-                    <CheckBox x:Name="CodeMixToggle" Content="Code-Mix Input" Margin="0,6,0,0"
-                              IsChecked="{Binding CodeMixEnabled, Mode=TwoWay}" />
-                    <Grid Margin="20,6,0,0"
-                          Visibility="{Binding IsChecked, ElementName=CodeMixToggle, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Style" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <ComboBox x:Name="CodeMixStyleCombo" Grid.Column="1" SelectionChanged="OnCodeMixStyleChanged" />
-                    </Grid>
-                    <CheckBox x:Name="TargetToggle" Content="Convert to Language" Margin="0,6,0,0"
-                              IsChecked="{Binding TargetLanguageEnabled, Mode=TwoWay}" />
-                    <Grid Margin="20,6,0,0"
-                          Visibility="{Binding IsChecked, ElementName=TargetToggle, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Target" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <ComboBox x:Name="TargetCombo" Grid.Column="1" SelectionChanged="OnTargetChanged" />
-                    </Grid>
-                </StackPanel>
-            </Border>
-
-            <!-- Custom Instructions -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel x:Name="CustomPromptSection">
-                    <TextBlock Text="Custom Instructions" Style="{StaticResource SectionHeader}" />
-                    <TextBlock Style="{StaticResource Caption}"
-                               Text="Prepended to the LLM system prompt on every dictation. Use it to bias output (e.g. &quot;always formal English&quot;, &quot;use Markdown lists&quot;, or supply a glossary)." />
-                    <TextBox x:Name="CustomPromptBox" Margin="0,8,0,0" MinHeight="90" MaxHeight="180"
-                             AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                             FontFamily="Consolas"
-                             Text="{Binding CustomSystemPrompt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                </StackPanel>
-            </Border>
-
-            <!-- Focus Words -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel x:Name="FocusWordsSection">
-                    <TextBlock Text="Focus Words" Style="{StaticResource SectionHeader}" />
-                    <TextBlock Style="{StaticResource Caption}"
-                               Text="One entry per line. Use &quot;trigger : replacement&quot; to expand a phrase you say into longer text — e.g. &quot;my email : johndoe@gmail.com&quot; types the address whenever you say &quot;my email&quot;. A line with no colon keeps that word spelled exactly as written (handy for names)." />
-                    <TextBox x:Name="FocusWordsBox" Margin="0,8,0,0" MinHeight="90" MaxHeight="180"
-                             AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                             FontFamily="Consolas"
-                             Text="{Binding FocusWords, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                </StackPanel>
-            </Border>
-
-            <!-- Microphone -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
-                    <DockPanel>
-                        <Button x:Name="MicRefreshBtn" DockPanel.Dock="Right" Content="Refresh"
-                                Padding="8,2" Click="OnRefreshMics" />
-                        <TextBlock Text="Microphone" Style="{StaticResource SectionHeader}" />
-                    </DockPanel>
-                    <ComboBox x:Name="MicCombo" Margin="0,4,0,0" SelectionChanged="OnMicChanged" />
-                    <TextBlock Style="{StaticResource Caption}"
-                               Text="Pin recording to a specific mic. Leave on System default to follow Windows." />
-                </StackPanel>
-            </Border>
-
-            <!-- Hotkey -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
-                    <TextBlock Text="Hotkey" Style="{StaticResource SectionHeader}" />
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Trigger key" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <ComboBox x:Name="HotkeyCombo" Grid.Column="1" SelectionChanged="OnHotkeyChanged" />
-                    </Grid>
-                    <TextBlock Style="{StaticResource Caption}"
-                               Text="Hold the selected key to record, release to transcribe. Press Esc while recording to cancel." />
-                    <Grid Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Feedback sound" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <ComboBox x:Name="FeedbackCombo" Grid.Column="1" SelectionChanged="OnFeedbackChanged" />
-                    </Grid>
-                </StackPanel>
-            </Border>
-
-            <!-- About -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
-                    <TextBlock Text="About" Style="{StaticResource SectionHeader}" />
-                    <TextBlock x:Name="VersionText" />
-                    <TextBlock Style="{StaticResource Caption}"
-                               Text="VocalFlow — dictate into any text field using ASR." />
-
-                    <CheckBox x:Name="AutoUpdateToggle" Content="Automatically check for updates daily"
-                              Margin="0,12,0,0" IsChecked="{Binding AutoUpdateEnabled, Mode=TwoWay}" />
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button x:Name="CheckUpdateBtn" Content="Check for Updates" Padding="14,5"
-                                Style="{StaticResource AccentButton}" Click="OnCheckForUpdates" />
-                        <TextBlock x:Name="UpdateStatus" VerticalAlignment="Center" Margin="10,0,0,0"
-                                   FontSize="11" TextWrapping="Wrap"
-                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                        <ContentControl Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,8">
+                                    <Button x:Name="MicRefreshBtn" DockPanel.Dock="Right" Content="Refresh"
+                                            Padding="8,3" Click="OnRefreshMics" />
+                                    <TextBlock Text="Microphone" Style="{StaticResource SectionHeader}"
+                                               Margin="0" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Input device" VerticalAlignment="Center" />
+                                    <ComboBox x:Name="MicCombo" Grid.Column="1" MinWidth="200" MaxWidth="300"
+                                              SelectionChanged="OnMicChanged" />
+                                </Grid>
+                                <TextBlock Style="{StaticResource Caption}"
+                                           Text="Pin recording to a specific mic. Leave on System default to follow Windows." />
+                            </StackPanel>
+                        </ContentControl>
                     </StackPanel>
-                </StackPanel>
-            </Border>
 
-        </StackPanel>
-    </ScrollViewer>
+                    <!-- ============ Page: Transcription ============ -->
+                    <StackPanel x:Name="PageTranscription" Visibility="Collapsed">
+                        <ContentControl Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,8">
+                                    <Button x:Name="DeepgramFetchBtn" DockPanel.Dock="Right" Content="Fetch Models"
+                                            Padding="8,3" Click="OnFetchDeepgramModels" />
+                                    <TextBlock Text="Deepgram API" Style="{StaticResource SectionHeader}"
+                                               Margin="0" VerticalAlignment="Center" />
+                                </DockPanel>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid>
+                                        <PasswordBox x:Name="DeepgramKeyBox" PasswordChanged="OnDeepgramKeyEdited" />
+                                        <TextBox x:Name="DeepgramKeyText" Visibility="Collapsed"
+                                                 TextChanged="OnDeepgramKeyEdited" />
+                                    </Grid>
+                                    <Button x:Name="DeepgramShowBtn" Grid.Column="1" Content="Show"
+                                            Margin="8,0,0,0" VerticalAlignment="Center"
+                                            Click="OnToggleDeepgramShow" />
+                                </Grid>
+
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button x:Name="DeepgramSaveBtn" Content="Save &amp; Verify" Padding="14,5"
+                                                Style="{StaticResource AccentButton}" Click="OnSaveDeepgram" />
+                                        <TextBlock x:Name="DeepgramStatus" VerticalAlignment="Center"
+                                                   Margin="10,0,0,0" FontSize="11" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="11">
+                                        <Hyperlink NavigateUri="https://console.deepgram.com/signup"
+                                                   RequestNavigate="OnNavigate">Get an API key →</Hyperlink>
+                                    </TextBlock>
+                                </Grid>
+
+                                <Border x:Name="DeepgramModelDivider" Style="{StaticResource InlineDivider}" />
+                                <Grid x:Name="ModelPanel">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Model" VerticalAlignment="Center" />
+                                    <ComboBox x:Name="ModelCombo" Grid.Column="1" MinWidth="220" MaxWidth="300"
+                                              IsEditable="True"
+                                              SelectionChanged="OnModelChanged" LostFocus="OnModelTextCommitted" />
+                                </Grid>
+                                <Grid x:Name="LanguagePanel" Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Language" VerticalAlignment="Center" />
+                                    <ComboBox x:Name="LanguageCombo" Grid.Column="1" MinWidth="220" MaxWidth="300"
+                                              SelectionChanged="OnLanguageChanged" />
+                                </Grid>
+                                <TextBlock x:Name="DeepgramError" Foreground="{StaticResource ErrorBrush}"
+                                           FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap"
+                                           Visibility="Collapsed" />
+                            </StackPanel>
+                        </ContentControl>
+                    </StackPanel>
+
+                    <!-- ============ Page: AI Polish ============ -->
+                    <StackPanel x:Name="PageAiPolish" Visibility="Collapsed">
+                        <ContentControl Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,8">
+                                    <Button x:Name="LlmFetchBtn" DockPanel.Dock="Right" Content="Fetch Models"
+                                            Padding="8,3" Click="OnFetchLlmModels" />
+                                    <TextBlock Text="LLM Post-Processing" Style="{StaticResource SectionHeader}"
+                                               Margin="0" VerticalAlignment="Center" />
+                                </DockPanel>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Provider" VerticalAlignment="Center" />
+                                    <ComboBox x:Name="ProviderCombo" Grid.Column="1" MinWidth="160" MaxWidth="300"
+                                              SelectionChanged="OnProviderChanged" />
+                                </Grid>
+
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid>
+                                        <PasswordBox x:Name="LlmKeyBox" PasswordChanged="OnLlmKeyEdited" />
+                                        <TextBox x:Name="LlmKeyText" Visibility="Collapsed"
+                                                 TextChanged="OnLlmKeyEdited" />
+                                    </Grid>
+                                    <Button x:Name="LlmShowBtn" Grid.Column="1" Content="Show"
+                                            Margin="8,0,0,0" VerticalAlignment="Center"
+                                            Click="OnToggleLlmShow" />
+                                </Grid>
+
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button x:Name="LlmSaveBtn" Content="Save &amp; Verify" Padding="14,5"
+                                                Style="{StaticResource AccentButton}" Click="OnSaveLlm" />
+                                        <TextBlock x:Name="LlmStatus" VerticalAlignment="Center"
+                                                   Margin="10,0,0,0" FontSize="11" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="11">
+                                        <Hyperlink x:Name="LlmKeyHyperlink" RequestNavigate="OnNavigate">Get a key →</Hyperlink>
+                                    </TextBlock>
+                                </Grid>
+
+                                <Border x:Name="LlmModelDivider" Style="{StaticResource InlineDivider}"
+                                        Visibility="Collapsed" />
+                                <Grid x:Name="LlmModelPanel" Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Model" VerticalAlignment="Center" />
+                                    <ComboBox x:Name="LlmModelCombo" Grid.Column="1" MinWidth="220" MaxWidth="300"
+                                              SelectionChanged="OnLlmModelChanged" />
+                                </Grid>
+                                <TextBlock x:Name="LlmError" Foreground="{StaticResource ErrorBrush}"
+                                           FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap"
+                                           Visibility="Collapsed" />
+                            </StackPanel>
+                        </ContentControl>
+                    </StackPanel>
+
+                    <!-- ============ Page: Corrections ============ -->
+                    <StackPanel x:Name="PageCorrections" Visibility="Collapsed">
+                        <ContentControl Style="{StaticResource SettingsCard}">
+                            <StackPanel x:Name="CorrectionsSection">
+                                <TextBlock Text="Features" Style="{StaticResource SectionHeader}" />
+                                <TextBlock x:Name="CorrectionsHint" Style="{StaticResource Caption}"
+                                           Margin="0,0,0,8"
+                                           Text="Configure an LLM provider in the AI Polish tab to enable these features." />
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Spelling Correction" VerticalAlignment="Center" />
+                                    <CheckBox x:Name="SpellingToggle" Grid.Column="1" Style="{StaticResource SwitchToggle}"
+                                              IsChecked="{Binding CorrectionModeEnabled, Mode=TwoWay}" />
+                                </Grid>
+                                <Border Style="{StaticResource InlineDivider}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Grammar Correction" VerticalAlignment="Center" />
+                                    <CheckBox x:Name="GrammarToggle" Grid.Column="1" Style="{StaticResource SwitchToggle}"
+                                              IsChecked="{Binding GrammarCorrectionEnabled, Mode=TwoWay}" />
+                                </Grid>
+                                <Border Style="{StaticResource InlineDivider}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Code-Mix Input" VerticalAlignment="Center" />
+                                    <CheckBox x:Name="CodeMixToggle" Grid.Column="1" Style="{StaticResource SwitchToggle}"
+                                              IsChecked="{Binding CodeMixEnabled, Mode=TwoWay}" />
+                                </Grid>
+                                <Grid Margin="0,10,0,0"
+                                      Visibility="{Binding IsChecked, ElementName=CodeMixToggle, Converter={StaticResource BoolToVis}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Style" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                    <ComboBox x:Name="CodeMixStyleCombo" Grid.Column="1" MinWidth="220" MaxWidth="300"
+                                              SelectionChanged="OnCodeMixStyleChanged" />
+                                </Grid>
+                                <Border Style="{StaticResource InlineDivider}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Convert to Language" VerticalAlignment="Center" />
+                                    <CheckBox x:Name="TargetToggle" Grid.Column="1" Style="{StaticResource SwitchToggle}"
+                                              IsChecked="{Binding TargetLanguageEnabled, Mode=TwoWay}" />
+                                </Grid>
+                                <Grid Margin="0,10,0,0"
+                                      Visibility="{Binding IsChecked, ElementName=TargetToggle, Converter={StaticResource BoolToVis}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Target" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                    <ComboBox x:Name="TargetCombo" Grid.Column="1" MinWidth="220" MaxWidth="300"
+                                              SelectionChanged="OnTargetChanged" />
+                                </Grid>
+                            </StackPanel>
+                        </ContentControl>
+
+                        <ContentControl Style="{StaticResource SettingsCard}">
+                            <StackPanel x:Name="CustomPromptSection">
+                                <TextBlock Text="Custom Instructions" Style="{StaticResource SectionHeader}" />
+                                <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,8"
+                                           Text="Prepended to the LLM system prompt on every dictation. Use it to bias output (e.g. &quot;always formal English&quot;, &quot;use Markdown lists&quot;, or supply a glossary)." />
+                                <TextBox x:Name="CustomPromptBox" MinHeight="90" MaxHeight="180"
+                                         AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                         FontFamily="Consolas"
+                                         Text="{Binding CustomSystemPrompt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </ContentControl>
+                    </StackPanel>
+
+                    <!-- ============ Page: Dictionary ============ -->
+                    <StackPanel x:Name="PageDictionary" Visibility="Collapsed">
+                        <ContentControl Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <TextBlock x:Name="DictFormTitle" Text="Add Entry"
+                                           Style="{StaticResource SectionHeader}" />
+                                <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,10"
+                                           Text="A plain entry locks the exact spelling of a name or term. Add a replacement to expand a spoken trigger into longer text — say &quot;my email&quot; and it types the full address." />
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid>
+                                        <TextBox x:Name="DictWordBox" TextChanged="OnDictFormChanged"
+                                                 KeyDown="OnDictFormKeyDown" />
+                                        <TextBlock Text="Word or phrase">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource Placeholder}">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=DictWordBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <TextBlock Grid.Column="1" Text="&#xE72A;" FontFamily="{StaticResource GlyphFont}"
+                                               FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                               VerticalAlignment="Center" Margin="8,0" />
+                                    <Grid Grid.Column="2">
+                                        <TextBox x:Name="DictReplacementBox" KeyDown="OnDictFormKeyDown" />
+                                        <TextBlock Text="Replacement (optional)">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource Placeholder}">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=DictReplacementBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </Grid>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <Button x:Name="DictCommitBtn" Content="Add to Dictionary" Padding="14,5"
+                                            Style="{StaticResource AccentButton}" IsEnabled="False"
+                                            Click="OnDictCommit" />
+                                    <Button x:Name="DictCancelBtn" Content="Cancel" Padding="12,5"
+                                            Margin="10,0,0,0" Visibility="Collapsed" Click="OnDictCancelEdit" />
+                                </StackPanel>
+                            </StackPanel>
+                        </ContentControl>
+
+                        <ContentControl Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <TextBlock x:Name="DictListTitle" Text="Entries (0)"
+                                           Style="{StaticResource SectionHeader}" />
+                                <TextBlock x:Name="DictEmptyText" Style="{StaticResource Caption}"
+                                           Text="Nothing here yet. Words you add — or spellings VocalFlow auto-learns when you correct a dictated word — will show up in this list." />
+                                <ItemsControl x:Name="DictList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel>
+                                                <Border Style="{StaticResource InlineDivider}" Margin="0,6,0,6"
+                                                        Visibility="{Binding ShowDivider, Converter={StaticResource BoolToVis}}" />
+                                                <Grid x:Name="Row" Background="Transparent">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <Button x:Name="StarBtn" Style="{StaticResource IconButton}"
+                                                            Content="&#xE734;" VerticalAlignment="Center"
+                                                            ToolTip="Favorite (pins to top)" Click="OnDictFavorite" />
+
+                                                    <StackPanel Grid.Column="1" Margin="6,2,6,2" VerticalAlignment="Center">
+                                                        <TextBlock x:Name="KeyText" Text="{Binding Key}" FontWeight="Medium" />
+                                                        <TextBlock x:Name="ExpansionText" Text="{Binding Expansion}" FontSize="11"
+                                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+
+                                                    <StackPanel x:Name="Actions" Grid.Column="2" Orientation="Horizontal"
+                                                                Visibility="Hidden" VerticalAlignment="Center">
+                                                        <Button Style="{StaticResource IconButton}" Content="&#xE70F;"
+                                                                ToolTip="Edit" Click="OnDictEdit" />
+                                                        <Button Style="{StaticResource IconButton}" Content="&#xE74D;"
+                                                                Foreground="{StaticResource ErrorBrush}"
+                                                                ToolTip="Delete" Click="OnDictDelete" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </StackPanel>
+                                            <DataTemplate.Triggers>
+                                                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Actions" Property="Visibility" Value="Visible" />
+                                                </Trigger>
+                                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                    <Setter TargetName="Actions" Property="Visibility" Value="Visible" />
+                                                    <Setter TargetName="KeyText" Property="Foreground"
+                                                            Value="{StaticResource AccentHoverBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Expansion}" Value="">
+                                                    <Setter TargetName="ExpansionText" Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsFavorite}" Value="True">
+                                                    <Setter TargetName="StarBtn" Property="Content" Value="&#xE735;" />
+                                                    <Setter TargetName="StarBtn" Property="Foreground"
+                                                            Value="{StaticResource ChipAmberBrush}" />
+                                                    <Setter TargetName="StarBtn" Property="ToolTip" Value="Unfavorite" />
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ContentControl>
+                    </StackPanel>
+
+                    <!-- ============ Page: Permissions ============ -->
+                    <StackPanel x:Name="PagePermissions" Visibility="Collapsed">
+                        <ContentControl Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Microphone" FontWeight="Medium" />
+                                        <TextBlock Text="Required for audio capture" FontSize="11"
+                                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="Open Settings" VerticalAlignment="Center"
+                                            Click="OnOpenMicPrivacy" />
+                                </Grid>
+                                <Border Style="{StaticResource InlineDivider}" />
+                                <TextBlock Style="{StaticResource Caption}"
+                                           Text="If VocalFlow records silence, check that microphone access is allowed for desktop apps in Windows privacy settings. No other system permission is needed — the hotkey and text injection work out of the box." />
+                            </StackPanel>
+                        </ContentControl>
+                    </StackPanel>
+
+                    <!-- ============ Page: About ============ -->
+                    <StackPanel x:Name="PageAbout" Visibility="Collapsed">
+                        <ContentControl Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="Version" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="VersionText" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                                    </StackPanel>
+                                    <Button x:Name="CheckUpdateBtn" Grid.Column="1" Content="Check for Updates"
+                                            Padding="14,5" Style="{StaticResource AccentButton}"
+                                            Click="OnCheckForUpdates" />
+                                </Grid>
+                                <Border Style="{StaticResource InlineDivider}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Automatically check for updates daily" VerticalAlignment="Center" />
+                                    <CheckBox x:Name="AutoUpdateToggle" Grid.Column="1" Style="{StaticResource SwitchToggle}"
+                                              IsChecked="{Binding AutoUpdateEnabled, Mode=TwoWay}" />
+                                </Grid>
+                                <TextBlock x:Name="UpdateStatus" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{StaticResource TextSecondaryBrush}" />
+                                <TextBlock Style="{StaticResource Caption}"
+                                           Text="VocalFlow — dictate into any text field using ASR." />
+                            </StackPanel>
+                        </ContentControl>
+                    </StackPanel>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
 </Window>
