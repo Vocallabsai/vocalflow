@@ -122,22 +122,14 @@ struct SettingsView: View {
         !appState.currentLLMAPIKey.isEmpty && !appState.currentLLMModel.isEmpty
     }
 
+    @State private var section: SettingsSection = .dictation
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: 12) {
-                transcriptionSection
-                llmSection
-                correctionsSection
-                customPromptSection
-                focusWordsSection
-                microphoneSection
-                hotkeySection
-                permissionsSection
-                aboutSection
-            }
-            .padding(16)
+        HStack(spacing: 0) {
+            sidebar
+            content
         }
-        .frame(width: 460, height: 640)
+        .frame(width: 720, height: 560)
         .background(Color.vlWindowBg)
         .tint(.vlAccent)
         .preferredColorScheme(.dark)
@@ -152,6 +144,69 @@ struct SettingsView: View {
             }
             appState.refreshAudioDevices()
         }
+    }
+
+    // MARK: - Chrome (sidebar + paged content)
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.vlAccent)
+                Text("VocalFlow")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.vlTextPrimary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 4)
+            .padding(.bottom, 12)
+
+            ForEach(SettingsSection.allCases) { item in
+                SidebarRow(
+                    title: item.title,
+                    icon: item.icon,
+                    isSelected: section == item
+                ) { section = item }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 16)
+        .frame(width: 200)
+        .frame(maxHeight: .infinity)
+        .background(Color.vlCardBg)
+        .overlay(alignment: .trailing) {
+            Rectangle().fill(Color.vlCardBorder).frame(width: 1)
+        }
+    }
+
+    private var content: some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                switch section {
+                case .dictation:
+                    hotkeySection
+                    microphoneSection
+                case .transcription:
+                    transcriptionSection
+                case .aiPolish:
+                    llmSection
+                case .corrections:
+                    correctionsSection
+                    customPromptSection
+                case .focusWords:
+                    focusWordsSection
+                case .permissions:
+                    permissionsSection
+                case .about:
+                    aboutSection
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Sections
@@ -571,6 +626,70 @@ struct SettingsView: View {
         if !languages.isEmpty && !languages.contains(appState.selectedLanguage) {
             appState.selectedLanguage = languages.first!
         }
+    }
+}
+
+// Sidebar navigation model: each case is one page in the settings window.
+private enum SettingsSection: String, CaseIterable, Identifiable {
+    case dictation, transcription, aiPolish, corrections, focusWords, permissions, about
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .dictation:     return "Dictation"
+        case .transcription: return "Transcription"
+        case .aiPolish:      return "AI Polish"
+        case .corrections:   return "Corrections"
+        case .focusWords:    return "Focus Words"
+        case .permissions:   return "Permissions"
+        case .about:         return "About"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .dictation:     return "waveform"
+        case .transcription: return "text.bubble"
+        case .aiPolish:      return "sparkles"
+        case .corrections:   return "text.badge.checkmark"
+        case .focusWords:    return "character.book.closed"
+        case .permissions:   return "lock.shield"
+        case .about:         return "info.circle"
+        }
+    }
+}
+
+// One row in the sidebar: icon + label, with selected/hover highlight.
+private struct SidebarRow: View {
+    let title: String
+    let icon: String
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 18)
+                    .foregroundStyle(isSelected ? Color.vlAccent : Color.vlTextSecondary)
+                Text(title)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? Color.vlTextPrimary : Color.vlTextSecondary)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color.vlAccent.opacity(0.16)
+                                     : (hovering ? Color.vlControlBg : Color.clear))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 
