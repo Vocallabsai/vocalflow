@@ -123,15 +123,17 @@ struct SettingsView: View {
     }
 
     @State private var section: SettingsSection = .dictation
+    @Namespace private var pillNamespace
 
     var body: some View {
         HStack(spacing: 0) {
             sidebar
             content
         }
-        .frame(width: 720, height: 560)
+        .frame(width: 760, height: 580)
         .background(Color.vlWindowBg)
         .tint(.vlAccent)
+        .toggleStyle(.switch)
         .preferredColorScheme(.dark)
         .onAppear {
             apiKeyInput = appState.deepgramAPIKey
@@ -149,33 +151,55 @@ struct SettingsView: View {
     // MARK: - Chrome (sidebar + paged content)
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 8) {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.vlAccent)
-                Text("VocalFlow")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Color.vlTextPrimary)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 9) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7).fill(LinearGradient.vlAccent)
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 25, height: 25)
+                .shadow(color: Color.vlAccent.opacity(0.5), radius: 8, y: 1)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("VocalFlow")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color.vlTextPrimary)
+                    Text("Settings")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.vlTextSecondary)
+                }
             }
             .padding(.horizontal, 10)
-            .padding(.top, 4)
-            .padding(.bottom, 12)
+            .padding(.bottom, 16)
 
             ForEach(SettingsSection.allCases) { item in
                 SidebarRow(
-                    title: item.title,
-                    icon: item.icon,
-                    isSelected: section == item
-                ) { section = item }
+                    section: item,
+                    isSelected: section == item,
+                    namespace: pillNamespace
+                ) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        section = item
+                    }
+                }
             }
             Spacer(minLength: 0)
+
+            Text("Version \(Self.appVersion)")
+                .font(.system(size: 10))
+                .foregroundStyle(Color.vlTextSecondary.opacity(0.7))
+                .padding(.horizontal, 10)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 16)
-        .frame(width: 200)
+        // Titlebar is transparent + full-size, so the sidebar runs the full window
+        // height; this clears the traffic lights.
+        .padding(.top, 46)
+        .padding(.bottom, 14)
+        .frame(width: 208)
         .frame(maxHeight: .infinity)
-        .background(Color.vlCardBg)
+        .background(Color.vlSidebarBg)
         .overlay(alignment: .trailing) {
             Rectangle().fill(Color.vlCardBorder).frame(width: 1)
         }
@@ -183,7 +207,9 @@ struct SettingsView: View {
 
     private var content: some View {
         ScrollView {
-            VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
+                pageHeader
+
                 switch section {
                 case .dictation:
                     hotkeySection
@@ -203,10 +229,47 @@ struct SettingsView: View {
                     aboutSection
                 }
             }
-            .padding(16)
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 20)
+            .padding(.top, 34)
+            .padding(.bottom, 20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .id(section)                 // new identity per page → crossfade on switch
+            .transition(.opacity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Soft accent glow bleeding in from the top-right gives the content pane depth.
+        .background(alignment: .topTrailing) {
+            Circle()
+                .fill(Color.vlAccent.opacity(0.13))
+                .frame(width: 380, height: 380)
+                .blur(radius: 100)
+                .offset(x: 110, y: -150)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private var pageHeader: some View {
+        HStack(spacing: 11) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8).fill(section.chipColor)
+                Image(systemName: section.icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 30, height: 30)
+            .shadow(color: section.chipColor.opacity(0.45), radius: 8, y: 2)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(section.title)
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(Color.vlTextPrimary)
+                Text(section.subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.vlTextSecondary)
+            }
+            Spacer()
+        }
+        .padding(.bottom, 4)
     }
 
     // MARK: - Sections
@@ -214,7 +277,7 @@ struct SettingsView: View {
     private var transcriptionSection: some View {
         VLCard {
             VLCardHeader(
-                title: "Transcription (Deepgram)",
+                title: "Deepgram API",
                 actionLabel: appState.availableModels.isEmpty ? "Fetch Models" : "Refresh",
                 isLoading: isFetchingModels,
                 isDisabled: appState.deepgramAPIKey.isEmpty,
@@ -372,14 +435,16 @@ struct SettingsView: View {
 
     private var correctionsSection: some View {
         VLCard {
-            VLCardHeader(title: "Corrections & Features")
+            VLCardHeader(title: "Features")
             if !llmConfigured {
-                Text("Configure an LLM provider above to enable these features.").vlCaption()
+                Text("Configure an LLM provider in the AI Polish tab to enable these features.").vlCaption()
             }
 
-            Toggle("Spelling Correction", isOn: $appState.correctionModeEnabled)
-            Toggle("Grammar Correction", isOn: $appState.grammarCorrectionEnabled)
-            Toggle("Code-Mix Input", isOn: $appState.codeMixEnabled)
+            toggleRow("Spelling Correction", isOn: $appState.correctionModeEnabled)
+            VLInlineDivider()
+            toggleRow("Grammar Correction", isOn: $appState.grammarCorrectionEnabled)
+            VLInlineDivider()
+            toggleRow("Code-Mix Input", isOn: $appState.codeMixEnabled)
             if appState.codeMixEnabled {
                 VLField(label: "Style") {
                     Picker("", selection: $appState.selectedCodeMix) {
@@ -392,7 +457,8 @@ struct SettingsView: View {
                 }
             }
 
-            Toggle("Convert to Language", isOn: $appState.targetLanguageEnabled)
+            VLInlineDivider()
+            toggleRow("Convert to Language", isOn: $appState.targetLanguageEnabled)
             if appState.targetLanguageEnabled {
                 VLField(label: "Target") {
                     Picker("", selection: $appState.selectedTargetLanguage) {
@@ -421,7 +487,7 @@ struct SettingsView: View {
                 .vlControlSurface()
 
             if !llmConfigured {
-                Text("Configure an LLM provider above to enable.").vlCaption()
+                Text("Configure an LLM provider in the AI Polish tab to enable.").vlCaption()
             } else if appState.customSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text("Empty — no custom instructions applied.").vlCaption()
             }
@@ -431,7 +497,6 @@ struct SettingsView: View {
 
     private var focusWordsSection: some View {
         VLCard {
-            VLCardHeader(title: "Focus Words")
             Text("One entry per line. Use \"trigger : replacement\" to expand a phrase you say into longer text — e.g. \"my email : johndoe@gmail.com\" types the address whenever you say \"my email\". A line with no colon keeps that word spelled exactly as written (handy for names).").vlCaption()
 
             TextEditor(text: $appState.focusWords)
@@ -496,6 +561,15 @@ struct SettingsView: View {
         }
     }
 
+    /// Full-width row: label on the left, switch pinned to the trailing edge.
+    private func toggleRow(_ title: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(title).foregroundStyle(Color.vlTextPrimary)
+            Spacer()
+            Toggle("", isOn: isOn).labelsHidden()
+        }
+    }
+
     private static let feedbackSoundOptions: [String] = [
         "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero",
         "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"
@@ -503,7 +577,6 @@ struct SettingsView: View {
 
     private var permissionsSection: some View {
         VLCard {
-            VLCardHeader(title: "Permissions")
             PermissionRowView(
                 label: "Microphone",
                 detail: "Required for audio capture",
@@ -520,7 +593,6 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         VLCard {
-            VLCardHeader(title: "About")
             HStack {
                 Text("Version").foregroundStyle(Color.vlTextPrimary)
                 Text(Self.appVersion).foregroundStyle(Color.vlTextSecondary)
@@ -531,7 +603,7 @@ struct SettingsView: View {
                 .buttonStyle(VLAccentButtonStyle())
                 .disabled(!updater.canCheckForUpdates)
             }
-            Toggle("Automatically check for updates", isOn: $updater.automaticChecksEnabled)
+            toggleRow("Automatically check for updates", isOn: $updater.automaticChecksEnabled)
             Text("VocalFlow — dictate into any text field using ASR").vlCaption()
         }
     }
@@ -646,46 +718,83 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         }
     }
 
+    var subtitle: String {
+        switch self {
+        case .dictation:     return "Hotkey, feedback sound & microphone"
+        case .transcription: return "Deepgram speech-to-text engine"
+        case .aiPolish:      return "LLM cleanup applied after transcription"
+        case .corrections:   return "Spelling, grammar, code-mix & translation"
+        case .focusWords:    return "Pinned spellings & text expansions"
+        case .permissions:   return "System access VocalFlow needs to work"
+        case .about:         return "Version & software updates"
+        }
+    }
+
     var icon: String {
         switch self {
         case .dictation:     return "waveform"
-        case .transcription: return "text.bubble"
+        case .transcription: return "text.bubble.fill"
         case .aiPolish:      return "sparkles"
-        case .corrections:   return "text.badge.checkmark"
-        case .focusWords:    return "character.book.closed"
-        case .permissions:   return "lock.shield"
-        case .about:         return "info.circle"
+        case .corrections:   return "checkmark.seal.fill"
+        case .focusWords:    return "character.book.closed.fill"
+        case .permissions:   return "lock.shield.fill"
+        case .about:         return "info"
+        }
+    }
+
+    /// Icon-chip tint, System Settings-style: one hue per area so pages are
+    /// recognizable at a glance. Hues picked to sit comfortably on the
+    /// dark-purple ground.
+    var chipColor: Color {
+        switch self {
+        case .dictation:     return Color(hex: 0x8B5CF6) // violet
+        case .transcription: return Color(hex: 0x3B82F6) // blue
+        case .aiPolish:      return Color(hex: 0xEC4899) // magenta
+        case .corrections:   return Color(hex: 0x10B981) // emerald
+        case .focusWords:    return Color(hex: 0xF59E0B) // amber
+        case .permissions:   return Color(hex: 0xEF4444) // red
+        case .about:         return Color(hex: 0x64748B) // slate
         }
     }
 }
 
-// One row in the sidebar: icon + label, with selected/hover highlight.
+// One row in the sidebar: colored icon chip + label. The selected row gets an
+// accent-gradient pill that slides between rows via matchedGeometryEffect.
 private struct SidebarRow: View {
-    let title: String
-    let icon: String
+    let section: SettingsSection
     let isSelected: Bool
+    let namespace: Namespace.ID
     let action: () -> Void
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(width: 18)
-                    .foregroundStyle(isSelected ? Color.vlAccent : Color.vlTextSecondary)
-                Text(title)
+            HStack(spacing: 9) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6).fill(section.chipColor)
+                    Image(systemName: section.icon)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 22, height: 22)
+
+                Text(section.title)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? Color.vlTextPrimary : Color.vlTextSecondary)
+                    .foregroundStyle(isSelected ? .white : Color.vlTextSecondary)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.vlAccent.opacity(0.16)
-                                     : (hovering ? Color.vlControlBg : Color.clear))
-            )
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 9)
+                        .fill(LinearGradient.vlAccent)
+                        .shadow(color: Color.vlAccent.opacity(0.4), radius: 7, y: 2)
+                        .matchedGeometryEffect(id: "sidebar-pill", in: namespace)
+                } else if hovering {
+                    RoundedRectangle(cornerRadius: 9).fill(Color.white.opacity(0.05))
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

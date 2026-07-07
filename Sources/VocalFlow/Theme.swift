@@ -23,6 +23,7 @@ extension Color {
     }
 
     static let vlWindowBg      = Color(hex: 0x0C0714)
+    static let vlSidebarBg     = Color(hex: 0x100A1E)
     static let vlCardBg        = Color(hex: 0x16112A)
     static let vlControlBg     = Color(hex: 0x1E1838)
     static let vlControlBorder = Color(hex: 0x352D55)
@@ -83,14 +84,28 @@ struct VLSecondaryButtonStyle: ButtonStyle {
 // MARK: - Layout primitives
 
 /// A branded card — the unit of the settings layout (WPF Card style).
+/// Vertical gradient + drop shadow give the card gentle depth against the
+/// darker window ground; a hairline top highlight sells the "lit from above" look.
 struct VLCard<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) { content }
+        VStack(alignment: .leading, spacing: 11) { content }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
-            .background(Color.vlCardBg, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.vlCardBorder, lineWidth: 1))
+            .background(
+                LinearGradient(colors: [Color(hex: 0x1B1435), Color(hex: 0x151027)],
+                               startPoint: .top, endPoint: .bottom),
+                in: RoundedRectangle(cornerRadius: 12)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(
+                        LinearGradient(colors: [Color(hex: 0x3A3060), Color.vlCardBorder],
+                                       startPoint: .top, endPoint: .bottom),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
     }
 }
 
