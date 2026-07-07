@@ -269,20 +269,20 @@ class MenuBarController {
         if settingsWindow == nil {
             let contentView = SettingsView(appState: appState, updater: updater)
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 720, height: 560),
-                styleMask: [.titled, .closable],
+                contentRect: NSRect(x: 0, y: 0, width: 760, height: 580),
+                styleMask: [.titled, .closable, .fullSizeContentView],
                 backing: .buffered,
                 defer: false
             )
             window.contentView = NSHostingView(rootView: contentView)
             window.title = "VocalFlow Settings"
             window.isReleasedWhenClosed = false
-            // Blend the titlebar into the brand-dark window: dark appearance so
-            // the traffic lights + title render for dark mode, a transparent
-            // titlebar (drops the separator line), and the brand background so
-            // the bar is the same colour as the content below it.
+            // Chromeless look: dark appearance for the traffic lights, transparent
+            // full-size titlebar so the sidebar runs the full window height, and
+            // the title text hidden (the sidebar carries the branding).
             window.appearance = NSAppearance(named: .darkAqua)
             window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
             window.backgroundColor = NSColor(Color.vlWindowBg)
             window.isMovableByWindowBackground = true
             self.settingsWindow = window
