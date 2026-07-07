@@ -16,6 +16,7 @@ private enum DefaultsKey: String {
     case targetLanguageEnabled   = "target_language_enabled"
     case selectedTargetLanguage  = "selected_target_language"
     case feedbackSoundName       = "feedback_sound_name"
+    case favoriteFocusWords      = "favorite_focus_words"
     case selectedAudioDeviceUID  = "selected_audio_device_uid"
     case customSystemPrompt      = "custom_system_prompt"
     case focusWords              = "focus_words"
@@ -213,6 +214,12 @@ class AppState: ObservableObject {
     /// Parsed, de-duplicated focus-word trigger keys. Drives the Deepgram keyterm query.
     var focusWordTerms: [String] { FocusWordsDictionary.keys(focusWords) }
 
+    /// Lowercased trigger keys the user starred in the Dictionary tab. Purely
+    /// organizational (pinned to the top of the list) — no recognition effect.
+    @Published var favoriteFocusWords: Set<String> {
+        didSet { UserDefaults.standard.set(Array(favoriteFocusWords), forKey: .favoriteFocusWords) }
+    }
+
     /// AVCaptureDevice.uniqueID of the chosen mic. Empty string = system default.
     @Published var selectedAudioDeviceUID: String {
         didSet { UserDefaults.standard.set(selectedAudioDeviceUID, forKey: .selectedAudioDeviceUID) }
@@ -279,6 +286,9 @@ class AppState: ObservableObject {
         self.feedbackSoundName = UserDefaults.standard.string(forKey: .feedbackSoundName) ?? "Tink"
         self.customSystemPrompt = UserDefaults.standard.string(forKey: .customSystemPrompt) ?? ""
         self.focusWords = UserDefaults.standard.string(forKey: .focusWords) ?? ""
+        self.favoriteFocusWords = Set(
+            UserDefaults.standard.stringArray(forKey: DefaultsKey.favoriteFocusWords.rawValue) ?? []
+        )
         self.selectedAudioDeviceUID = UserDefaults.standard.string(forKey: .selectedAudioDeviceUID) ?? ""
 
         self.deepgramService.onPartialTranscript = { [weak self] text in
