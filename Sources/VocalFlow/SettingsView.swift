@@ -321,6 +321,7 @@ struct SettingsView: View {
                             .textFieldStyle(.plain)
                             .foregroundStyle(Color.vlTextPrimary)
                             .padding(.horizontal, 8).padding(.vertical, 5)
+                            .frame(width: 220)
                             .vlControlSurface()
                     } else {
                         Picker("", selection: $appState.selectedModel) {
@@ -495,17 +496,139 @@ struct SettingsView: View {
         .disabled(!llmConfigured)
     }
 
+    // MARK: Dictionary (focus words)
+
+    @State private var newTrigger = ""
+    @State private var newReplacement = ""
+    /// Original key of the entry being edited; nil = adding a new one.
+    @State private var editingKey: String? = nil
+
+    private var dictionaryEntries: [DictionaryEntry] {
+        FocusWordsDictionary.parseEntries(appState.focusWords)
+    }
+
+    /// Favorites pinned first; original order preserved within each group.
+    private var displayedEntries: [DictionaryEntry] {
+        let favs = appState.favoriteFocusWords
+        let all = dictionaryEntries
+        return all.filter { favs.contains($0.key.lowercased()) }
+             + all.filter { !favs.contains($0.key.lowercased()) }
+    }
+
+    /// Serialize back to the newline "key : value" format `FocusWordsDictionary`
+    /// parses (and the type-over auto-learn appends to).
+    private func saveEntries(_ entries: [DictionaryEntry]) {
+        appState.focusWords = entries
+            .map { $0.key == $0.value ? $0.key : "\($0.key) : \($0.value)" }
+            .joined(separator: "\n")
+    }
+
+    private func isFavorite(_ entry: DictionaryEntry) -> Bool {
+        appState.favoriteFocusWords.contains(entry.key.lowercased())
+    }
+
+    private func toggleFavorite(_ entry: DictionaryEntry) {
+        let key = entry.key.lowercased()
+        if appState.favoriteFocusWords.contains(key) {
+            appState.favoriteFocusWords.remove(key)
+        } else {
+            appState.favoriteFocusWords.insert(key)
+        }
+    }
+
+    private func beginEdit(_ entry: DictionaryEntry) {
+        editingKey = entry.key
+        newTrigger = entry.key
+        newReplacement = entry.value == entry.key ? "" : entry.value
+    }
+
+    private func deleteEntry(_ entry: DictionaryEntry) {
+        saveEntries(dictionaryEntries.filter { $0.key != entry.key })
+        appState.favoriteFocusWords.remove(entry.key.lowercased())
+        if editingKey == entry.key { resetEntryEditor() }
+    }
+
+    private func resetEntryEditor() {
+        editingKey = nil
+        newTrigger = ""
+        newReplacement = ""
+    }
+
+    private func commitEntry() {
+        let trigger = newTrigger.trimmingCharacters(in: .whitespacesAndNewlines)
+        let repl = newReplacement.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trigger.isEmpty else { return }
+        let entry = DictionaryEntry(key: trigger, value: repl.isEmpty ? trigger : repl)
+
+        var entries = dictionaryEntries
+        if let editing = editingKey, let idx = entries.firstIndex(where: { $0.key == editing }) {
+            // Carry a favorite across a rename.
+            if appState.favoriteFocusWords.contains(editing.lowercased()), editing.lowercased() != trigger.lowercased() {
+                appState.favoriteFocusWords.remove(editing.lowercased())
+                appState.favoriteFocusWords.insert(trigger.lowercased())
+            }
+            entries[idx] = entry
+        } else if let idx = entries.firstIndex(where: { $0.key.lowercased() == trigger.lowercased() }) {
+            entries[idx] = entry     // re-adding an existing trigger updates it
+        } else {
+            entries.append(entry)
+        }
+        saveEntries(entries)
+        resetEntryEditor()
+    }
+
+    @ViewBuilder
     private var focusWordsSection: some View {
         VLCard {
-            Text("One entry per line. Use \"trigger : replacement\" to expand a phrase you say into longer text — e.g. \"my email : johndoe@gmail.com\" types the address whenever you say \"my email\". A line with no colon keeps that word spelled exactly as written (handy for names).").vlCaption()
+            VLCardHeader(title: editingKey == nil ? "Add Entry" : "Edit “\(editingKey ?? "")”")
+            Text("A plain entry locks the exact spelling of a name or term. Add a replacement to expand a spoken trigger into longer text — say “my email” and it types the full address.").vlCaption()
 
-            TextEditor(text: $appState.focusWords)
-                .font(.system(.body, design: .monospaced))
-                .foregroundStyle(Color.vlTextPrimary)
-                .scrollContentBackground(.hidden)
-                .padding(8)
-                .frame(minHeight: 90, maxHeight: 180)
-                .vlControlSurface()
+            HStack(spacing: 8) {
+                TextField("Word or phrase", text: $newTrigger)
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(Color.vlTextPrimary)
+                    .padding(.horizontal, 8).padding(.vertical, 6)
+                    .vlControlSurface()
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.vlTextSecondary)
+                TextField("Replacement (optional)", text: $newReplacement)
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(Color.vlTextPrimary)
+                    .padding(.horizontal, 8).padding(.vertical, 6)
+                    .vlControlSurface()
+            }
+            .onSubmit { commitEntry() }
+
+            HStack(spacing: 10) {
+                Button(editingKey == nil ? "Add to Dictionary" : "Save Changes") { commitEntry() }
+                    .buttonStyle(VLAccentButtonStyle())
+                    .disabled(newTrigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if editingKey != nil {
+                    Button("Cancel") { resetEntryEditor() }
+                        .buttonStyle(VLSecondaryButtonStyle())
+                }
+                Spacer()
+            }
+        }
+
+        VLCard {
+            VLCardHeader(title: "Entries (\(dictionaryEntries.count))")
+            if dictionaryEntries.isEmpty {
+                Text("Nothing here yet. Words you add — or spellings VocalFlow auto-learns when you correct a dictated word — will show up in this list.").vlCaption()
+            } else {
+                ForEach(Array(displayedEntries.enumerated()), id: \.element.key) { index, entry in
+                    if index > 0 { VLInlineDivider() }
+                    DictionaryEntryRow(
+                        entry: entry,
+                        isFavorite: isFavorite(entry),
+                        isEditing: editingKey == entry.key,
+                        onFavorite: { toggleFavorite(entry) },
+                        onEdit: { beginEdit(entry) },
+                        onDelete: { deleteEntry(entry) }
+                    )
+                }
+            }
         }
     }
 
@@ -712,7 +835,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .transcription: return "Transcription"
         case .aiPolish:      return "AI Polish"
         case .corrections:   return "Corrections"
-        case .focusWords:    return "Focus Words"
+        case .focusWords:    return "Dictionary"
         case .permissions:   return "Permissions"
         case .about:         return "About"
         }
@@ -724,7 +847,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .transcription: return "Deepgram speech-to-text engine"
         case .aiPolish:      return "LLM cleanup applied after transcription"
         case .corrections:   return "Spelling, grammar, code-mix & translation"
-        case .focusWords:    return "Pinned spellings & text expansions"
+        case .focusWords:    return "Exact spellings & spoken text expansions"
         case .permissions:   return "System access VocalFlow needs to work"
         case .about:         return "Version & software updates"
         }
@@ -798,6 +921,64 @@ private struct SidebarRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
+}
+
+// One dictionary entry: star (favorite) + key/replacement + edit/delete actions.
+// Action icons stay subdued until the row is hovered, Wispr-style.
+private struct DictionaryEntryRow: View {
+    let entry: DictionaryEntry
+    let isFavorite: Bool
+    let isEditing: Bool
+    let onFavorite: () -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: onFavorite) {
+                Image(systemName: isFavorite ? "star.fill" : "star")
+                    .font(.system(size: 12))
+                    .foregroundStyle(isFavorite ? Color(hex: 0xF59E0B) : Color.vlTextSecondary.opacity(hovering ? 1 : 0.5))
+            }
+            .buttonStyle(.plain)
+            .help(isFavorite ? "Unfavorite" : "Favorite (pins to top)")
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(entry.key)
+                    .fontWeight(.medium)
+                    .foregroundStyle(isEditing ? Color.vlAccentHover : Color.vlTextPrimary)
+                if entry.value != entry.key {
+                    Text("→ \(entry.value)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.vlTextSecondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer()
+
+            if hovering || isEditing {
+                Button(action: onEdit) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.vlTextSecondary)
+                }
+                .buttonStyle(.plain)
+                .help("Edit")
+
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.vlError.opacity(0.85))
+                }
+                .buttonStyle(.plain)
+                .help("Delete")
+            }
+        }
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
         .onHover { hovering = $0 }
     }
 }

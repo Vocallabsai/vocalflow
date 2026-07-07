@@ -138,15 +138,19 @@ struct VLCardHeader: View {
     }
 }
 
-/// "Label  [ control ]" row — label hugs the left, control fills the rest.
+/// "Label …… [control]" row — label hugs the left, the control sits at the
+/// trailing edge at its natural size (capped so long menu items truncate
+/// instead of blowing out the row). System Settings-style alignment.
 struct VLField<Control: View>: View {
     let label: String
     @ViewBuilder var control: Control
     var body: some View {
         HStack(spacing: 12) {
             Text(label).foregroundStyle(Color.vlTextPrimary)
-            control.frame(maxWidth: .infinity)
+            Spacer(minLength: 16)
+            control.frame(maxWidth: 300, alignment: .trailing)
         }
+        .frame(maxWidth: .infinity)
     }
 }
 
