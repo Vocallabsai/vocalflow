@@ -4,6 +4,12 @@
 <dict>
 	<!-- Merged with Xcode's generated Info.plist (GENERATE_INFOPLIST_FILE=YES).
 	     The vocalflow:// scheme is how the keyboard opens the app to dictate. -->
+	<!-- Keeps the mic + Deepgram stream alive after we bounce back to the host
+	     app — the whole point of the background-dictation flow. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
