@@ -1,17 +1,16 @@
 import UIKit
-import AVFoundation
 
-/// Spike keyboard: a single "hold to talk" button that records the mic, streams to
-/// Deepgram, and inserts the transcript into whatever text field is focused via
-/// `textDocumentProxy`. Reuses `DeepgramService` (copied from the macOS app).
+/// VocalFlow keyboard — the "bounce" architecture.
 ///
-/// This is the proof-of-concept for the make-or-break question: does mic + network
-/// work inside a keyboard extension, under its memory limit? Build to a real device.
+/// iOS forbids audio capture inside keyboard extensions (both AVAudioEngine and
+/// AudioQueue are denied at I/O start, even with Full Access + mic permission —
+/// verified on device). So the keyboard doesn't record. Instead:
+///   1. 🎤 tap → opens the VocalFlow app via the `vocalflow://` URL scheme.
+///   2. The app records + streams to Deepgram, then posts the transcript to the
+///      shared mailbox (`SharedTranscript`).
+///   3. The user taps the system "‹ back" link (top-left) to return.
+///   4. This keyboard reappears, finds the pending transcript, and inserts it.
 class KeyboardViewController: UIInputViewController {
-
-    private let deepgram = DeepgramService()
-    private let mic = MicCapture()
-    private var isRecording = false
 
     private let micButton = UIButton(type: .system)
     private let statusLabel = UILabel()
@@ -20,10 +19,14 @@ class KeyboardViewController: UIInputViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         buildUI()
-        deepgram.onPartialTranscript = { [weak self] text in
-            guard let self, self.isRecording else { return }
-            self.statusLabel.text = text.isEmpty ? "Listening…" : text
+        if !hasFullAccess {
+            statusLabel.text = "Enable “Allow Full Access” for VocalFlow in Settings → General → Keyboard, or inserted text can't come back from the app."
         }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        insertPendingTranscript()
     }
 
     // MARK: UI
@@ -31,19 +34,18 @@ class KeyboardViewController: UIInputViewController {
     private func buildUI() {
         view.backgroundColor = UIColor(red: 0.047, green: 0.027, blue: 0.078, alpha: 1) // brand #0C0714
 
-        statusLabel.text = "Hold the mic and speak"
+        statusLabel.text = "Tap the mic — VocalFlow opens, you speak, then tap ‹ to come back."
         statusLabel.textColor = .lightGray
         statusLabel.font = .systemFont(ofSize: 13)
-        statusLabel.numberOfLines = 3
+        statusLabel.numberOfLines = 0
         statusLabel.textAlignment = .center
 
-        micButton.setTitle("🎤  Hold to talk", for: .normal)
+        micButton.setTitle("🎤  Dictate", for: .normal)
         micButton.titleLabel?.font = .systemFont(ofSize: 20, weight: .semibold)
         micButton.setTitleColor(.white, for: .normal)
         micButton.backgroundColor = UIColor(red: 0.52, green: 0, blue: 1, alpha: 1) // brand accent #8400FF
         micButton.layer.cornerRadius = 14
-        micButton.addTarget(self, action: #selector(startDictation), for: .touchDown)
-        micButton.addTarget(self, action: #selector(stopDictation), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        micButton.addTarget(self, action: #selector(openDictation), for: .touchUpInside)
 
         nextKeyboardButton.setTitle("🌐", for: .normal)
         nextKeyboardButton.titleLabel?.font = .systemFont(ofSize: 20)
@@ -53,20 +55,20 @@ class KeyboardViewController: UIInputViewController {
             v.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(v)
         }
-        // Keyboard height: use priority 999 (not required) so it doesn't fight the
-        // system's own 'UIView-Encapsulated-Layout-Height' constraint on first layout.
+        // Keyboard height: priority 999 so it doesn't fight the system's own
+        // 'UIView-Encapsulated-Layout-Height' constraint on first layout.
         let heightConstraint = view.heightAnchor.constraint(equalToConstant: 240)
         heightConstraint.priority = UILayoutPriority(999)
 
         NSLayoutConstraint.activate([
             heightConstraint,
 
-            statusLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            statusLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 14),
             statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
 
             micButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            micButton.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: 8),
+            micButton.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: 14),
             micButton.widthAnchor.constraint(equalToConstant: 260),
             micButton.heightAnchor.constraint(equalToConstant: 66),
 
@@ -75,58 +77,31 @@ class KeyboardViewController: UIInputViewController {
         ])
     }
 
-    // MARK: Dictation
+    // MARK: Bounce out (open the app)
 
-    @objc private func startDictation() {
-        guard hasFullAccess else {
-            statusLabel.text = "Enable “Allow Full Access” for VocalFlow in Settings → General → Keyboard."
-            return
-        }
-        guard !isRecording else { return }
-        requestMic { [weak self] granted in
-            guard let self else { return }
-            guard granted else { self.statusLabel.text = "Microphone denied — enable it in Settings."; return }
-            self.beginStreaming()
-        }
-    }
-
-    private func requestMic(_ completion: @escaping (Bool) -> Void) {
-        if #available(iOS 17.0, *) {
-            AVAudioApplication.requestRecordPermission { g in DispatchQueue.main.async { completion(g) } }
-        } else {
-            AVAudioSession.sharedInstance().requestRecordPermission { g in DispatchQueue.main.async { completion(g) } }
-        }
-    }
-
-    private func beginStreaming() {
-        isRecording = true
-        statusLabel.text = "Listening…"
-        deepgram.connect(apiKey: SpikeConfig.deepgramAPIKey, model: "nova-3-general", language: "en-US")
-        mic.onBuffer = { [weak self] buffer, format in
-            self?.deepgram.sendAudioBuffer(buffer, format: format)
-        }
-        do {
-            try mic.start()
-        } catch {
-            statusLabel.text = "Mic failed: \(error.localizedDescription)"
-            deepgram.cancel()
-            isRecording = false
-        }
-    }
-
-    @objc private func stopDictation() {
-        guard isRecording else { return }
-        isRecording = false
-        mic.stop()
-        statusLabel.text = "Transcribing…"
-        Task { [weak self] in
-            let text = await self?.deepgram.closeStream() ?? ""
-            await MainActor.run {
-                guard let self else { return }
-                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty { self.textDocumentProxy.insertText(trimmed) }
-                self.statusLabel.text = trimmed.isEmpty ? "Nothing heard — try again" : "Inserted ✓"
+    @objc private func openDictation() {
+        guard let url = URL(string: "vocalflow://dictate") else { return }
+        // Keyboard extensions have no UIApplication.shared, but the responder
+        // chain ends in an application proxy that responds to openURL: — the
+        // long-standing, App Store-shipped way keyboards open their app.
+        let selector = sel_registerName("openURL:")
+        var responder: UIResponder? = self
+        while let current = responder {
+            if current.responds(to: selector), !(current is UIInputViewController) {
+                current.perform(selector, with: url)
+                statusLabel.text = "Opening VocalFlow… speak there, then tap ‹ (top-left) to come back."
+                return
             }
+            responder = current.next
         }
+        statusLabel.text = "Couldn't open the app — open VocalFlow from your home screen."
+    }
+
+    // MARK: Bounce back (insert the result)
+
+    private func insertPendingTranscript() {
+        guard let text = SharedTranscript.consume() else { return }
+        textDocumentProxy.insertText(text)
+        statusLabel.text = "Inserted ✓ (\(SharedTranscript.transport))"
     }
 }
