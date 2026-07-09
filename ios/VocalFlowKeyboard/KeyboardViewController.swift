@@ -103,6 +103,24 @@ class KeyboardViewController: UIInputViewController {
 
     // MARK: Actions
 
+    /// 🎤 tapped. First try the instant path: ping the app with a "start"
+    /// command — if its mic is still hot from a recent dictation, recording
+    /// begins in the background and we never leave this app. If no recording
+    /// state shows up quickly, fall back to opening the app (the flicker).
+    @objc private func micTapped() {
+        statusLabel.text = "Starting…"
+        SharedTranscript.sendCommand("start")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
+            guard let self else { return }
+            if let state = SharedTranscript.readState(),
+               state.phase == .recording,
+               Date().timeIntervalSince1970 - state.date < 5 {
+                return   // hot start worked — refreshFromState already flipped the UI
+            }
+            self.openDictation()
+        }
+    }
+
     @objc private func openDictation() {
         var components = URLComponents(string: "vocalflow://dictate")!
         if let host = hostAppBundleID {
@@ -193,7 +211,7 @@ class KeyboardViewController: UIInputViewController {
         micButton.setTitleColor(.white, for: .normal)
         micButton.backgroundColor = brandAccent
         micButton.layer.cornerRadius = 14
-        micButton.addTarget(self, action: #selector(openDictation), for: .touchUpInside)
+        micButton.addTarget(self, action: #selector(micTapped), for: .touchUpInside)
 
         cancelButton.setTitle("✕", for: .normal)
         cancelButton.titleLabel?.font = .systemFont(ofSize: 22, weight: .semibold)

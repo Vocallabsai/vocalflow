@@ -34,6 +34,9 @@ final class MicCapture {
     }
 
     func start() throws {
+        // Already capturing (hot keep-alive session) — nothing to do.
+        if engine.isRunning || audioQueue != nil { return }
+
         let session = AVAudioSession.sharedInstance()
 
         // Record-only first: keyboards may not be granted the output side.
