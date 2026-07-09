@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Merged with Xcode's generated Info.plist (GENERATE_INFOPLIST_FILE=YES).
+	     The vocalflow:// scheme is how the keyboard opens the app to dictate. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>vocallabsai.VocalFlow</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>vocalflow</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
