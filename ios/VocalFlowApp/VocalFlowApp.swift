@@ -57,16 +57,47 @@ final class DictationController: ObservableObject {
     private var commandObserver: DarwinObserver?
     private var returnURL: URL?
 
+    /// Mic session stays hot for a while after a dictation so the next one can
+    /// start instantly from the keyboard — no app flicker. The orange mic
+    /// indicator stays on during this window (the mic is genuinely held open).
+    private var micHot = false
+    private var keepAliveTimer: Timer?
+    private static let keepAliveSeconds: TimeInterval = 180
+
     init() {
-        // ✓/✕ from the keyboard, delivered while we're foreground OR background.
+        // Commands from the keyboard, delivered foreground OR background.
         commandObserver = DarwinObserver(name: SharedTranscript.commandNote) { [weak self] in
             guard let self, let command = SharedTranscript.takeCommand() else { return }
             switch command {
+            case "start":  self.startFromKeyboard()
             case "stop":   self.finish()
             case "cancel": self.cancel()
             default: break
             }
         }
+    }
+
+    /// 🎤 tapped on the keyboard. Hot mic → start instantly in the background
+    /// (no app switch). Cold + we happen to be foreground → normal start.
+    /// Cold + backgrounded/dead → do nothing; the keyboard times out and falls
+    /// back to opening the app via URL.
+    private func startFromKeyboard() {
+        if micHot {
+            startHotDictation()
+        } else if UIApplication.shared.applicationState == .active {
+            begin(returnToHost: nil)
+        }
+    }
+
+    private func startHotDictation() {
+        keepAliveTimer?.invalidate()
+        isActive = true
+        runningInBackground = true
+        liveText = ""
+        finalText = ""
+        wireDeepgram()
+        phase = .recording
+        SharedTranscript.writeState(.recording)
     }
 
     /// Bundle-id → URL-scheme map for bouncing back to where the user was
@@ -113,7 +144,8 @@ final class DictationController: ObservableObject {
         }
     }
 
-    private func startRecording() {
+    /// Connect a fresh Deepgram stream and route mic buffers into it.
+    private func wireDeepgram() {
         deepgram.onPartialTranscript = { [weak self] text in
             guard let self, case .recording = self.phase, !text.isEmpty else { return }
             self.liveText = text
@@ -123,26 +155,39 @@ final class DictationController: ObservableObject {
         mic.onBuffer = { [weak self] buffer, format in
             self?.deepgram.sendAudioBuffer(buffer, format: format)
         }
+    }
+
+    private func startRecording() {
+        wireDeepgram()
         do {
             try mic.start()
             phase = .recording
             SharedTranscript.writeState(.recording)
-            bounceBackIfPossible()
+            bounceBack()
         } catch {
             deepgram.cancel()
             fail(error.localizedDescription)
         }
     }
 
-    /// Return to the app the user was typing in. The audio session keeps
-    /// running thanks to UIBackgroundModes=audio; the keyboard takes over as UI.
-    private func bounceBackIfPossible() {
-        guard let url = returnURL else { return }
+    /// Hop straight back to whatever app the user was typing in. The audio
+    /// session keeps running thanks to UIBackgroundModes=audio; the keyboard
+    /// takes over as the UI.
+    private func bounceBack() {
         // Give the session a beat to be fully established before backgrounding.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             guard let self, case .recording = self.phase else { return }
             self.runningInBackground = true
-            UIApplication.shared.open(url)
+            // The `suspend` selector backgrounds us and iOS resumes the
+            // previous app — universal, no host-app detection needed.
+            // (Private API: fine for the spike; an App Store build would lead
+            // with the URL-scheme map and keep this as fallback.)
+            let suspend = NSSelectorFromString("suspend")
+            if UIApplication.shared.responds(to: suspend) {
+                UIApplication.shared.perform(suspend)
+            } else if let url = self.returnURL {
+                UIApplication.shared.open(url)
+            }
         }
     }
 
@@ -150,9 +195,11 @@ final class DictationController: ObservableObject {
         guard case .recording = phase else { return }
         phase = .transcribing
         SharedTranscript.writeState(.transcribing)
-        mic.stop()
-        // Stopping the mic drops our background-audio privilege; a background
-        // task buys the seconds needed to flush the Deepgram stream.
+        // Pause streaming but keep the engine + session hot so the next
+        // dictation can start instantly from the keyboard (keep-alive window).
+        mic.onBuffer = nil
+        // Safety net for the stream flush in case iOS reevaluates our
+        // background rights.
         let bgTask = UIApplication.shared.beginBackgroundTask(withName: "finish-dictation")
         Task { [weak self] in
             defer { UIApplication.shared.endBackgroundTask(bgTask) }
@@ -166,16 +213,35 @@ final class DictationController: ObservableObject {
                 SharedTranscript.post(text)
                 SharedTranscript.writeState(.done)
                 self.phase = .done
+                self.startKeepAlive()
                 // If the keyboard drove this, our work is done — go idle so the
-                // next vocalflow:// open starts clean.
+                // next start begins clean.
                 if self.runningInBackground { self.isActive = false }
             }
         }
     }
 
-    func cancel() {
+    private func startKeepAlive() {
+        micHot = true
+        keepAliveTimer?.invalidate()
+        keepAliveTimer = Timer.scheduledTimer(withTimeInterval: Self.keepAliveSeconds,
+                                              repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.coolDown() }
+        }
+    }
+
+    /// Fully release the microphone (ends the orange indicator; the next
+    /// dictation will need the app-flicker start again).
+    private func coolDown() {
+        keepAliveTimer?.invalidate()
+        keepAliveTimer = nil
+        micHot = false
         mic.stop()
+    }
+
+    func cancel() {
         deepgram.cancel()
+        coolDown()
         SharedTranscript.clearState()
         isActive = false
         runningInBackground = false
@@ -184,6 +250,7 @@ final class DictationController: ObservableObject {
     func retry() { begin(returnToHost: nil) }
 
     private func fail(_ message: String) {
+        coolDown()
         phase = .failed(message)
         SharedTranscript.writeState(.failed, message: message)
     }
