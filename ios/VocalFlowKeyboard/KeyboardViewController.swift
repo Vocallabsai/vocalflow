@@ -81,20 +81,47 @@ class KeyboardViewController: UIInputViewController {
 
     @objc private func openDictation() {
         guard let url = URL(string: "vocalflow://dictate") else { return }
-        // Keyboard extensions have no UIApplication.shared, but the responder
-        // chain ends in an application proxy that responds to openURL: — the
-        // long-standing, App Store-shipped way keyboards open their app.
-        let selector = sel_registerName("openURL:")
+        statusLabel.text = "Opening VocalFlow… speak there, then tap ‹ (top-left) to come back."
+
+        // Attempt 1: the sanctioned extension API. Keyboards historically get
+        // `success == false`, but on some OS versions it just works.
+        if let context = extensionContext {
+            context.open(url) { [weak self] success in
+                DispatchQueue.main.async {
+                    guard let self, !success else { return }
+                    self.openViaResponderChain(url)
+                }
+            }
+        } else {
+            openViaResponderChain(url)
+        }
+    }
+
+    /// Keyboard extensions have no `UIApplication.shared`, but the extension
+    /// process does host a UIApplication at the top of the responder chain.
+    /// The legacy `openURL:` selector silently no-ops on modern iOS — the
+    /// 3-argument `openURL:options:completionHandler:` is the one that works,
+    /// and it can't go through `perform()` (2-arg limit), so we call its IMP.
+    private func openViaResponderChain(_ url: URL) {
         var responder: UIResponder? = self
         while let current = responder {
-            if current.responds(to: selector), !(current is UIInputViewController) {
-                current.perform(selector, with: url)
-                statusLabel.text = "Opening VocalFlow… speak there, then tap ‹ (top-left) to come back."
-                return
+            if let app = current as? UIApplication {
+                let modern = NSSelectorFromString("openURL:options:completionHandler:")
+                if app.responds(to: modern) {
+                    typealias OpenURLFn = @convention(c) (AnyObject, Selector, NSURL, NSDictionary, Any?) -> Void
+                    let fn = unsafeBitCast(app.method(for: modern), to: OpenURLFn.self)
+                    fn(app, modern, url as NSURL, [:] as NSDictionary, nil)
+                    return
+                }
+                let legacy = sel_registerName("openURL:")
+                if app.responds(to: legacy) {
+                    app.perform(legacy, with: url)
+                    return
+                }
             }
             responder = current.next
         }
-        statusLabel.text = "Couldn't open the app — open VocalFlow from your home screen."
+        statusLabel.text = "Couldn't open VocalFlow — open it from your home screen; the text will still insert when you come back."
     }
 
     // MARK: Bounce back (insert the result)
