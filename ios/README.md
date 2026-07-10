@@ -1,90 +1,78 @@
-# VocalFlow iOS — keyboard + app-bounce dictation
+# VocalFlow iOS — keyboard + background dictation
 
-## Spike verdict (read this first)
+**The Xcode project is checked in: open `ios/VocalFlow.xcodeproj` and hit ▶.**
+(Sign both targets with your team on first open; free personal teams work —
+installs just expire after ~7 days.)
 
-The original de-risking question was: *can a custom keyboard extension record the
-mic and stream to Deepgram?* **Answer: no — iOS blocks audio capture inside
-keyboard extensions at the system level.** Verified on a physical iPhone (iOS 26):
-with Full Access on, mic permission granted, and the usage descriptions in place,
-the audio *session* activates but audio I/O is refused at start by **both**
-`AVAudioEngine` (`'what'` / 2003329396) and the C-level `AudioQueue`. This matches
-the platform's documented behavior — it's why Wispr Flow's iOS keyboard doesn't
-record inline either.
+## Architecture (and why)
 
-**The shipped architecture is therefore the app-bounce flow** (same as Wispr):
+The original spike asked: *can a custom keyboard extension record the mic?*
+**No — iOS blocks audio capture inside keyboard extensions at the system
+level.** Verified on device (iOS 26): with Full Access + mic permission +
+usage strings all in place, the audio session activates but audio I/O is
+refused at start by both `AVAudioEngine` ('what' / 2003329396) and the
+C-level `AudioQueue`. Same restriction Wispr Flow works around.
+
+So VocalFlow uses the **background-dictation** architecture (Wispr-parity):
 
 ```
-Messages (user taps 🎤 on VocalFlow keyboard)
-   └─ keyboard opens vocalflow://dictate  ──►  VocalFlow app (foreground)
-                                                 ├─ records mic (full app privileges)
-                                                 ├─ streams to Deepgram, live transcript
-                                                 └─ posts final text to the App Group "mailbox"
-User taps the system ‹ back link (top-left)  ──►  back in Messages
-   └─ keyboard reappears → consumes mailbox → textDocumentProxy.insertText(...)
+Messages: user taps 🎤 on the VocalFlow keyboard
+  ├─ hot mic (≤3 min since last dictation)?
+  │    └─ keyboard sends "start" → the backgrounded app begins streaming
+  │       instantly — NO app switch at all
+  └─ cold start?
+       └─ keyboard opens vocalflow://dictate → app starts recording →
+          auto-returns via the suspend selector (~0.5 s flicker)
+While recording: app streams mic → Deepgram in the BACKGROUND
+  (UIBackgroundModes: audio; orange mic indicator on), heartbeating live
+  state (partial transcript + RMS level) to the keyboard every 0.15 s
+Keyboard = remote control: waveform + live words; ✓ = stop, ✕ = cancel
+On ✓: app flushes the stream, posts the transcript → keyboard inserts it
 ```
 
-Cost: one extra tap (the ‹ back link). Benefit: no 50 MB keyboard memory ceiling,
-full app UI during dictation (live transcript, later AI polish/dictionary), and it
-actually works.
+The keyboard↔app bridge (`SharedTranscript.swift`) is an App Group file
+mailbox + Darwin notifications, with a marked-pasteboard fallback and a
+keyboard-side watchdog (recording state silent >6 s ⇒ "lost connection").
 
-## Components
+## Layout
 
-- `VocalFlowKeyboard/KeyboardViewController.swift` — the keyboard: 🎤 opens the
-  app (responder-chain `openURL:` — keyboards have no `UIApplication.shared`);
-  `viewWillAppear` consumes any fresh pending transcript and inserts it.
-- `VocalFlowKeyboard/SharedTranscript.swift` — the mailbox. Primary: a JSON file
-  in the App Group container (`group.vocallabsai.VocalFlow`). Fallback when the
-  container is unavailable: a custom-marked pasteboard item. Transcripts expire
-  after 3 minutes and are consumed at most once.
-- `VocalFlowApp/VocalFlowApp.swift` — container app: `onOpenURL` →
-  `DictationController` (MicCapture + DeepgramService) → post to mailbox →
-  "tap ‹ to go back" instructions.
-- `VocalFlowKeyboard/MicCapture.swift` — mic → 16 kHz mono Int16 PCM. Used by the
-  **app** (keyboards can't record); keeps an AudioQueue fallback path.
-- `VocalFlowKeyboard/SpikeConfig.swift` — hardcoded Deepgram key placeholder
-  (spike only — never commit a real key).
-- Copies of the macOS app's `DeepgramService.swift` + `APIError.swift` +
-  `URLConstants.swift` (cross-platform, reused verbatim).
-- `VocalFlowApp/App-Info.plist` — registers the `vocalflow://` URL scheme
-  (named `Info.plist` inside the Xcode project's `VocalFlow/` folder).
-- `*.entitlements` — App Groups on both targets.
+- `VocalFlow.xcodeproj` — checked in, shared scheme included. Xcode 16
+  synchronized-folders project; target membership lives in
+  `PBXFileSystemSynchronizedBuildFileExceptionSet` blocks.
+- `VocalFlow/` — app target's folder: assets, `Info.plist` (URL scheme +
+  `UIBackgroundModes: audio`), entitlements.
+- `VocalFlowKeyboard/` — all Swift sources (the app target compiles
+  `VocalFlowApp.swift`, `MicCapture.swift`, `SharedTranscript.swift`,
+  `AppSettings.swift` + the shared services from here via membership
+  exceptions), keyboard `Info.plist` (`RequestsOpenAccess`), entitlements.
+- `DeepgramService.swift`, `APIError.swift`, `URLConstants.swift` are copies
+  of the macOS app's cross-platform files — keep them in sync with
+  `Sources/VocalFlow/`.
 
-## Xcode project assembly
+The Deepgram key is **not in code**: the app's setup screen has a
+Save & Verify field; the key lives in App Group `UserDefaults`
+(`AppSettings.swift` — graduate to Keychain before shipping).
 
-The `.xcodeproj` is not checked in. It lives on the dev Mac (`~/Desktop/VocalFlow`)
-as an Xcode 16 synchronized-folders project:
-- Root folders `VocalFlow/` (app: Assets, Info.plist, entitlements) and
-  `VocalFlowKeyboard/` (all Swift sources + keyboard Info.plist + entitlements).
-- Target membership via `PBXFileSystemSynchronizedBuildFileExceptionSet`: the app
-  target additionally compiles `VocalFlowApp.swift`, `MicCapture.swift`,
-  `DeepgramService.swift`, `APIError.swift`, `URLConstants.swift`,
-  `SpikeConfig.swift`, `SharedTranscript.swift` from the keyboard folder.
-- App target: `INFOPLIST_FILE = VocalFlow/Info.plist` (merged with the generated
-  plist), `CODE_SIGN_ENTITLEMENTS`, `INFOPLIST_KEY_NSMicrophoneUsageDescription`.
-- Keyboard target: `RequestsOpenAccess = YES` and `NSMicrophoneUsageDescription`
-  in its Info.plist (the usage string must ALSO be on the **app** — a keyboard's
-  mic request is TCC-attributed to the host app; missing it = instant SIGABRT).
+## Run / test (physical iPhone; the simulator can't test the keyboard flow)
 
-To recreate from scratch: iOS App project (SwiftUI) + Custom Keyboard Extension
-target named `VocalFlowKeyboard`, add these sources per the membership above, set
-the plist/entitlements build settings, sign both targets (App Groups needs the
-group registered; automatic signing handles it).
+1. Open `ios/VocalFlow.xcodeproj`, select the **VocalFlow** scheme + your
+   iPhone, ▶. (Both targets: Signing & Capabilities → your team.)
+2. In the app: paste your Deepgram key → **Save & Verify**.
+3. Settings → General → Keyboard → Keyboards → Add **VocalFlow** →
+   **Allow Full Access**.
+4. Any app: 🌐 → VocalFlow → **🎤** → speak (watch live words on the
+   keyboard) → **✓** → text inserts. Repeat taps within 3 min start
+   instantly with no app switch.
 
-## Test flow (physical iPhone)
+## Known constraints / next steps
 
-1. Run the **VocalFlow** scheme (not the keyboard scheme — extensions can't
-   launch standalone) on the device.
-2. Settings → General → Keyboard → Keyboards → Add **VocalFlow** → **Allow Full
-   Access** (required for the keyboard to read the App Group mailbox).
-3. In Messages/Notes: 🌐 → VocalFlow keyboard → tap **🎤 Dictate**.
-4. The app opens → grant mic on first run → speak → **Done**.
-5. Tap **‹** (top-left status-bar back link) → the keyboard inserts the text.
-
-## Known limitations / next steps
-
-- One extra tap (‹ back) per dictation — platform tax, same as Wispr.
-- Free personal team: app runs ~7 days per install; App Groups *should* provision
-  on personal teams — if signing rejects it, `SharedTranscript` automatically
-  falls back to the marked-pasteboard transport (iOS shows a paste banner).
-- Next: move the Deepgram key from `SpikeConfig` to app UI + App Group storage,
-  hold-to-talk & auto-return polish, LLM post-processing, Focus Words reuse.
+- The mic indicator stays on during the 3-min hot window (mic is genuinely
+  held open for instant restarts) — tune `keepAliveSeconds` in
+  `VocalFlowApp.swift`.
+- Private APIs used (fine for dev; revisit for App Store review): the
+  `suspend` selector for auto-return (fallback: URL-scheme map) and the
+  host-bundle-ID KVC read. Review will also scrutinize a Full Access
+  keyboard streaming mic audio off-device — needs clear disclosure.
+- Next: LLM post-processing (reuse `LLMService`), Focus Words/Dictionary
+  (reuse `FocusWordsDictionary`, feed keyterms into `connect`), transcript
+  history, Keychain key storage, paid-team signing + TestFlight.

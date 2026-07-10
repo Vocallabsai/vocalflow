@@ -57,6 +57,13 @@ final class DictationController: ObservableObject {
     private var commandObserver: DarwinObserver?
     private var returnURL: URL?
 
+    /// Latest mic RMS level (0…~0.3 for speech), set from the audio thread and
+    /// shipped to the keyboard by the state heartbeat.
+    private var currentLevel: Double = 0
+    /// While recording: rewrites the shared state every 0.15 s (heartbeat +
+    /// live level + partial). The keyboard treats a silent state as a dead app.
+    private var stateTimer: Timer?
+
     /// Mic session stays hot for a while after a dictation so the next one can
     /// start instantly from the keyboard — no app flicker. The orange mic
     /// indicator stays on during this window (the mic is genuinely held open).
@@ -82,6 +89,7 @@ final class DictationController: ObservableObject {
     /// Cold + backgrounded/dead → do nothing; the keyboard times out and falls
     /// back to opening the app via URL.
     private func startFromKeyboard() {
+        if case .recording = phase { return }   // already going
         if micHot {
             startHotDictation()
         } else if UIApplication.shared.applicationState == .active {
@@ -98,6 +106,7 @@ final class DictationController: ObservableObject {
         wireDeepgram()
         phase = .recording
         SharedTranscript.writeState(.recording)
+        startStateHeartbeat()
     }
 
     /// Bundle-id → URL-scheme map for bouncing back to where the user was
@@ -122,6 +131,10 @@ final class DictationController: ObservableObject {
         phase = .starting
         liveText = ""
         finalText = ""
+        guard !AppSettings.deepgramKey.isEmpty else {
+            fail("No Deepgram API key yet — open VocalFlow and add one on the setup screen.")
+            return
+        }
         requestMicPermission { [weak self] granted in
             guard let self else { return }
             guard granted else {
@@ -149,12 +162,44 @@ final class DictationController: ObservableObject {
         deepgram.onPartialTranscript = { [weak self] text in
             guard let self, case .recording = self.phase, !text.isEmpty else { return }
             self.liveText = text
-            SharedTranscript.writeState(.recording, partial: text)
         }
-        deepgram.connect(apiKey: SpikeConfig.deepgramAPIKey, model: "nova-3-general", language: "en-US")
+        deepgram.connect(apiKey: AppSettings.deepgramKey, model: "nova-3-general", language: "en-US")
         mic.onBuffer = { [weak self] buffer, format in
             self?.deepgram.sendAudioBuffer(buffer, format: format)
+            let level = Self.rmsLevel(buffer)
+            DispatchQueue.main.async { self?.currentLevel = level }
         }
+    }
+
+    /// Cheap RMS over a strided sample of the buffer (runs on the audio thread).
+    private nonisolated static func rmsLevel(_ buffer: AVAudioPCMBuffer) -> Double {
+        guard let channel = buffer.int16ChannelData?[0] else { return 0 }
+        let frames = Int(buffer.frameLength)
+        guard frames > 0 else { return 0 }
+        var sum = 0.0, count = 0
+        var i = 0
+        while i < frames {
+            let v = Double(channel[i]) / 32768
+            sum += v * v
+            count += 1
+            i += 8
+        }
+        return (sum / Double(max(count, 1))).squareRoot()
+    }
+
+    private func startStateHeartbeat() {
+        stateTimer?.invalidate()
+        stateTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, case .recording = self.phase else { return }
+                SharedTranscript.writeState(.recording, partial: self.liveText, level: self.currentLevel)
+            }
+        }
+    }
+
+    private func stopStateHeartbeat() {
+        stateTimer?.invalidate()
+        stateTimer = nil
     }
 
     private func startRecording() {
@@ -163,6 +208,7 @@ final class DictationController: ObservableObject {
             try mic.start()
             phase = .recording
             SharedTranscript.writeState(.recording)
+            startStateHeartbeat()
             bounceBack()
         } catch {
             deepgram.cancel()
@@ -193,6 +239,7 @@ final class DictationController: ObservableObject {
 
     func finish() {
         guard case .recording = phase else { return }
+        stopStateHeartbeat()
         phase = .transcribing
         SharedTranscript.writeState(.transcribing)
         // Pause streaming but keep the engine + session hot so the next
@@ -240,6 +287,7 @@ final class DictationController: ObservableObject {
     }
 
     func cancel() {
+        stopStateHeartbeat()
         deepgram.cancel()
         coolDown()
         SharedTranscript.clearState()
@@ -250,6 +298,7 @@ final class DictationController: ObservableObject {
     func retry() { begin(returnToHost: nil) }
 
     private func fail(_ message: String) {
+        stopStateHeartbeat()
         coolDown()
         phase = .failed(message)
         SharedTranscript.writeState(.failed, message: message)
@@ -343,13 +392,65 @@ struct DictationView: View {
 // MARK: - Default screen (setup instructions)
 
 struct SetupView: View {
+    @State private var keyInput = AppSettings.deepgramKey
+    @State private var keyStatus = AppSettings.deepgramKey.isEmpty ? "" : "Key saved ✓"
+    @State private var verifying = false
+
+    private var trimmedKey: String {
+        keyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func saveAndVerify() {
+        let key = trimmedKey
+        guard !key.isEmpty else { return }
+        AppSettings.deepgramKey = key      // save first — verification is advisory
+        verifying = true
+        keyStatus = "Verifying…"
+        Task {
+            do {
+                _ = try await DeepgramService().fetchModels(apiKey: key)
+                keyStatus = "Saved & verified ✓"
+            } catch let error as APIError {
+                keyStatus = "Saved, but verification failed: \(error.userMessage)"
+            } catch {
+                keyStatus = "Saved, but verification failed: \(error.localizedDescription)"
+            }
+            verifying = false
+        }
+    }
+
     var body: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 10) {
                 Image(systemName: "mic.fill").font(.largeTitle).foregroundStyle(.purple)
                 Text("VocalFlow").font(.largeTitle.bold())
             }
             Text("Voice dictation keyboard (spike build)").foregroundStyle(.secondary)
+
+            GroupBox("Deepgram API key") {
+                VStack(alignment: .leading, spacing: 10) {
+                    SecureField("Paste your Deepgram key", text: $keyInput)
+                        .textFieldStyle(.roundedBorder)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    HStack(spacing: 12) {
+                        Button(verifying ? "Verifying…" : "Save & Verify") { saveAndVerify() }
+                            .buttonStyle(.borderedProminent)
+                            .tint(Color(red: 0.52, green: 0, blue: 1))
+                            .disabled(trimmedKey.isEmpty || verifying)
+                        Link("Get a free key →",
+                             destination: URL(string: "https://console.deepgram.com/signup")!)
+                            .font(.callout)
+                    }
+                    if !keyStatus.isEmpty {
+                        Text(keyStatus)
+                            .font(.caption)
+                            .foregroundStyle(keyStatus.contains("✓") ? .green : .orange)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
 
             GroupBox("Enable the keyboard") {
                 VStack(alignment: .leading, spacing: 8) {
@@ -368,6 +469,7 @@ struct SetupView: View {
             Spacer()
         }
         .padding(24)
+        }
         .preferredColorScheme(.dark)
     }
 }
