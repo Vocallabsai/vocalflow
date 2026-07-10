@@ -23,7 +23,7 @@ struct DictationState: Codable {
 }
 
 enum SharedTranscript {
-    static let appGroupID = "group.vocallabsai.VocalFlow"
+    static let appGroupID = "group.ai.vocallabs.vocalflow.shared"
 
     /// Darwin notification names (payload-less cross-process pings).
     static let stateDidChangeNote = "ai.vocallabs.vocalflow.state"
