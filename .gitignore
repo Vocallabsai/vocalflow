@@ -15,6 +15,12 @@ DerivedData/
 *.o
 *.d
 
+# …but the iOS project IS checked in (user state stays out)
+!ios/VocalFlow.xcodeproj/
+ios/VocalFlow.xcodeproj/xcuserdata/
+!ios/VocalFlow.xcodeproj/project.xcworkspace/
+ios/VocalFlow.xcodeproj/project.xcworkspace/xcuserdata/
+
 # Editor
 .vscode/
 

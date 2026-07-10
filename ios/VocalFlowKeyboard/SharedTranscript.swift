@@ -17,6 +17,8 @@ struct DictationState: Codable {
     var phase: DictationPhase
     var partial: String = ""
     var message: String = ""
+    /// Mic RMS level (0…~0.3 for speech) — drives the keyboard's waveform.
+    var level: Double? = nil
     var date: TimeInterval
 }
 
@@ -85,9 +87,9 @@ enum SharedTranscript {
 
     // MARK: - Live state (app → keyboard)
 
-    static func writeState(_ phase: DictationPhase, partial: String = "", message: String = "") {
+    static func writeState(_ phase: DictationPhase, partial: String = "", message: String = "", level: Double? = nil) {
         guard let url = fileURL(stateFile) else { return }
-        let state = DictationState(phase: phase, partial: partial, message: message,
+        let state = DictationState(phase: phase, partial: partial, message: message, level: level,
                                    date: Date().timeIntervalSince1970)
         if let data = try? JSONEncoder().encode(state) {
             try? data.write(to: url, options: .atomic)

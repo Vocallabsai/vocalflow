@@ -21,6 +21,8 @@ class KeyboardViewController: UIInputViewController {
     private let doneButton = UIButton(type: .system)
     private let waveformStack = UIStackView()
     private var waveTimer: Timer?
+    /// Live mic level from the app (via the shared state) — drives bar heights.
+    private var currentLevel: Double = 0
     // Shared
     private let statusLabel = UILabel()
     private let nextKeyboardButton = UIButton(type: .system)
@@ -78,13 +80,24 @@ class KeyboardViewController: UIInputViewController {
             return
         }
         let age = Date().timeIntervalSince1970 - state.date
-        let stale = age > 120
+
+        // Watchdog: the app heartbeats every 0.15 s while recording, so a
+        // quiet state file means iOS killed/suspended it mid-dictation.
+        let staleRecording = state.phase == .recording && age > 6
+        let staleTranscribing = state.phase == .transcribing && age > 25
+        if staleRecording || staleTranscribing {
+            SharedTranscript.clearState()
+            mode = .idle
+            statusLabel.text = "Lost the connection to VocalFlow — tap 🎤 to try again."
+            return
+        }
 
         switch state.phase {
-        case .recording where !stale:
+        case .recording:
             if mode != .recording { mode = .recording }
             statusLabel.text = state.partial.isEmpty ? "Listening…" : state.partial
-        case .transcribing where !stale:
+            currentLevel = state.level ?? 0
+        case .transcribing:
             if mode != .transcribing { mode = .transcribing }
             statusLabel.text = "Transcribing…"
         case .failed:
@@ -302,8 +315,12 @@ class KeyboardViewController: UIInputViewController {
         guard waveTimer == nil else { return }
         waveTimer = Timer.scheduledTimer(withTimeInterval: 0.14, repeats: true) { [weak self] _ in
             guard let self else { return }
+            // Bars track the real mic level (RMS ~0.02–0.25 for speech), with
+            // per-bar jitter so it reads as a waveform rather than a meter.
+            let base = min(1.0, 0.12 + self.currentLevel * 4.5)
             for bar in self.waveformStack.arrangedSubviews {
-                let scale = CGFloat.random(in: 0.2...1.0)
+                let jitter = CGFloat.random(in: 0.55...1.25)
+                let scale = max(0.1, min(1.0, CGFloat(base) * jitter))
                 UIView.animate(withDuration: 0.13) {
                     bar.transform = CGAffineTransform(scaleX: 1, y: scale)
                 }
