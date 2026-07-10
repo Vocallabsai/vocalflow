@@ -4,6 +4,10 @@
 <dict>
 	<!-- Merged with Xcode's generated Info.plist (GENERATE_INFOPLIST_FILE=YES).
 	     The vocalflow:// scheme is how the keyboard opens the app to dictate. -->
+	<!-- Only standard HTTPS/ATS crypto — skips the export-compliance question
+	     on every TestFlight upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- Keeps the mic + Deepgram stream alive after we bounce back to the host
 	     app — the whole point of the background-dictation flow. -->
 	<key>UIBackgroundModes</key>
@@ -14,7 +18,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>vocallabsai.VocalFlow</string>
+			<string>ai.vocallabs.vocalflow</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>vocalflow</string>
