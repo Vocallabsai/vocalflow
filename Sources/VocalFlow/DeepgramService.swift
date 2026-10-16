@@ -32,6 +32,13 @@ class DeepgramService: NSObject, URLSessionWebSocketDelegate {
     private var isWaitingForFinal = false
     private var timeoutWorkItem: DispatchWorkItem?
 
+    // Deepgram intermittently rejects a valid key's WebSocket handshake (HTTP 401
+    // "Invalid credentials", alternating with 101 on the same key). Audio is already
+    // buffered until the socket opens, so retrying the handshake loses nothing.
+    private var lastRequest: URLRequest?
+    private var connectAttempts = 0
+    private static let maxConnectAttempts = 6
+
     // Audio frames captured before the WebSocket finishes its handshake are
     // buffered here and flushed in order once the socket opens. Without this
     // the first ~100-300ms of speech is silently dropped on every recording.
@@ -102,10 +109,37 @@ class DeepgramService: NSObject, URLSessionWebSocketDelegate {
         request.setValue("Token \(apiKey)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 30
 
-        webSocketTask = session.webSocketTask(with: request)
-        webSocketTask?.resume()
+        lastRequest = request
+        connectAttempts = 0
         dgLogger.info("WebSocket connecting (model=\(model), language=\(language))")
-        receiveNext()
+        openSocket()
+    }
+
+    private func openSocket() {
+        guard let request = lastRequest else { return }
+        connectAttempts += 1
+        let task = session.webSocketTask(with: request)
+        webSocketTask = task
+        task.resume()
+        receiveNext(on: task)
+    }
+
+    /// True (and a retry is scheduled) if `task` failed before its handshake completed
+    /// and we still have attempts left.
+    private func retryHandshakeIfPossible(failedTask task: URLSessionWebSocketTask) -> Bool {
+        bufferLock.lock()
+        let opened = isSocketOpen
+        bufferLock.unlock()
+        guard task === webSocketTask, !opened, lastRequest != nil,
+              connectAttempts < Self.maxConnectAttempts else { return false }
+        let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
+        dgLogger.info("WebSocket handshake failed (HTTP \(status)); retry \(self.connectAttempts)")
+        let delay = 0.15 * Double(connectAttempts)
+        DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, self.webSocketTask === task else { return }
+            self.openSocket()
+        }
+        return true
     }
 
     func fetchModels(apiKey: String) async throws -> [DeepgramModel] {
@@ -197,20 +231,28 @@ class DeepgramService: NSObject, URLSessionWebSocketDelegate {
             }
             isWaitingForFinal = true
 
-            // Send empty binary frame — Deepgram's signal to flush and finalize
-            webSocketTask?.send(.data(Data())) { [weak self] error in
-                if error != nil {
-                    self?.deliverAndDisconnect()
+            // Send empty binary frame — Deepgram's signal to flush and finalize.
+            // If the handshake is still pending (or being retried), queue it behind
+            // the buffered audio so it's flushed in order once the socket opens.
+            bufferLock.lock()
+            let openNow = isSocketOpen
+            if !openNow { pendingFrames.append(Data()) }
+            bufferLock.unlock()
+            if openNow {
+                webSocketTask?.send(.data(Data())) { [weak self] error in
+                    if error != nil {
+                        self?.deliverAndDisconnect()
+                    }
                 }
             }
 
-            // Safety timeout: deliver what we have after 3 seconds
+            // Safety timeout: deliver what we have (longer while still connecting)
             let workItem = DispatchWorkItem { [weak self] in
                 guard let self, self.isWaitingForFinal else { return }
                 self.deliverAndDisconnect()
             }
             timeoutWorkItem = workItem
-            DispatchQueue.global().asyncAfter(deadline: .now() + 3.0, execute: workItem)
+            DispatchQueue.global().asyncAfter(deadline: .now() + (openNow ? 3.0 : 6.0), execute: workItem)
         }
     }
 
@@ -231,16 +273,18 @@ class DeepgramService: NSObject, URLSessionWebSocketDelegate {
         disconnect()
     }
 
-    private func receiveNext() {
-        webSocketTask?.receive { [weak self] result in
+    private func receiveNext(on task: URLSessionWebSocketTask) {
+        task.receive { [weak self] result in
             guard let self else { return }
             switch result {
             case .success(let message):
                 if case .string(let text) = message {
                     self.handleMessage(text)
                 }
-                self.receiveNext()
+                self.receiveNext(on: task)
             case .failure(let error):
+                if self.retryHandshakeIfPossible(failedTask: task) { return }
+                guard task === self.webSocketTask else { return }
                 dgLogger.error("WebSocket receive failed: \(error.localizedDescription)")
                 if self.isWaitingForFinal {
                     self.deliverAndDisconnect()
@@ -304,6 +348,7 @@ class DeepgramService: NSObject, URLSessionWebSocketDelegate {
     }
 
     private func disconnect() {
+        lastRequest = nil
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         webSocketTask = nil
     }

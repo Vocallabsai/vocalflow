@@ -73,6 +73,16 @@ class LLMService {
     /// Delay before the single retry on 429/5xx / network blips.
     var retryDelay: TimeInterval = 0.25
 
+    /// Provider `/models` lists also include speech, TTS and safety-classifier models that reject
+    /// `/chat/completions` (e.g. Groq's `whisper-large-v3` — an easy pick by mistake in a speech
+    /// app). Keep them out of the picker so post-processing can't silently start failing.
+    static func isChatModel(id: String) -> Bool {
+        let id = id.lowercased()
+        let nonChatMarkers = ["whisper", "orpheus", "playai-tts", "-tts", "tts-", "prompt-guard",
+                              "safeguard", "embed", "moderation", "transcribe"]
+        return !nonChatMarkers.contains { id.contains($0) }
+    }
+
     func fetchModels(provider: LLMProvider, apiKey: String) async throws -> [LLMModel] {
         guard !apiKey.isEmpty else { throw APIError.missingKey }
 
@@ -92,6 +102,7 @@ class LLMService {
             throw APIError.decoding
         }
         let models = (root.data ?? [])
+            .filter { Self.isChatModel(id: $0.id) }
             .map { LLMModel(id: $0.id, displayName: $0.name ?? $0.id) }
             .sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
         llmLogger.info("\(provider.displayName) /models returned \(models.count) entries")

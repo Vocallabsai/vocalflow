@@ -64,6 +64,20 @@ class AudioEngine {
         return deviceID
     }
 
+    private static func defaultInputDeviceID() -> AudioDeviceID? {
+        var deviceID = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &deviceID
+        )
+        return status == noErr && deviceID != kAudioObjectUnknown ? deviceID : nil
+    }
+
     func startCapture(deviceUID: String? = nil, callback: @escaping BufferCallback) throws {
         let newEngine = AVAudioEngine()
         let inputNode = newEngine.inputNode
@@ -71,11 +85,14 @@ class AudioEngine {
         // Pin AVAudioEngine's input HAL to the chosen device. Must happen
         // *before* querying outputFormat/installing the tap, since both
         // depend on the live hardware format.
+        // Skip pinning when the chosen device is already the system default:
+        // re-selecting it can fail ('nope') and leave the input unit wedged.
         if let deviceUID, !deviceUID.isEmpty,
            let deviceID = Self.audioDeviceID(forUID: deviceUID),
+           deviceID != Self.defaultInputDeviceID(),
            let audioUnit = inputNode.audioUnit {
             var id = deviceID
-            AudioUnitSetProperty(
+            let status = AudioUnitSetProperty(
                 audioUnit,
                 kAudioOutputUnitProperty_CurrentDevice,
                 kAudioUnitScope_Global,
@@ -83,6 +100,11 @@ class AudioEngine {
                 &id,
                 UInt32(MemoryLayout<AudioDeviceID>.size)
             )
+            if status != noErr {
+                // Don't keep using an engine whose device switch failed — it
+                // captures silence and can hang on stop. Retry on the default mic.
+                return try startCapture(deviceUID: nil, callback: callback)
+            }
         }
 
         // Must use hardware's native format for tap installation

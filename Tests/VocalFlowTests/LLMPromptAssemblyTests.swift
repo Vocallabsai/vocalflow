@@ -162,4 +162,15 @@ final class LLMPromptAssemblyTests: XCTestCase {
         XCTAssertTrue(LLMProcessingOptions(codeMix: nil, fixSpelling: false, fixGrammar: true, targetLanguage: nil).hasAnyStep)
         XCTAssertTrue(LLMProcessingOptions(codeMix: nil, fixSpelling: false, fixGrammar: false, targetLanguage: "French").hasAnyStep)
     }
+
+    func testModelPickerExcludesNonChatModels() {
+        for id in ["whisper-large-v3", "whisper-large-v3-turbo", "canopylabs/orpheus-v1-english",
+                   "meta-llama/llama-prompt-guard-2-86m", "openai/gpt-oss-safeguard-20b"] {
+            XCTAssertFalse(LLMService.isChatModel(id: id), id)
+        }
+        for id in ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b",
+                   "anthropic/claude-haiku-5.5", "llama-3.3-70b-versatile"] {
+            XCTAssertTrue(LLMService.isChatModel(id: id), id)
+        }
+    }
 }
