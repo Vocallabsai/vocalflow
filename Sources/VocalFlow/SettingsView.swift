@@ -274,7 +274,62 @@ struct SettingsView: View {
 
     // MARK: - Sections
 
+    private static let onDeviceLanguages: [(String, String)] = [
+        ("en-GB", "English (UK)"), ("en-US", "English (US)"), ("en-AU", "English (Australia)"),
+        ("en-CA", "English (Canada)"), ("en-IE", "English (Ireland)"), ("en-IN", "English (India)"),
+        ("fr-FR", "French"), ("de-DE", "German"), ("es-ES", "Spanish (Spain)"),
+        ("es-MX", "Spanish (Mexico)"), ("it-IT", "Italian"), ("pt-BR", "Portuguese (Brazil)"),
+        ("ja-JP", "Japanese"), ("zh-CN", "Chinese (Mandarin)"), ("ko-KR", "Korean"),
+    ]
+
     private var transcriptionSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            engineSection
+            if appState.transcriptionEngine == .deepgram {
+                deepgramSection
+            }
+        }
+    }
+
+    private var engineSection: some View {
+        VLCard {
+            VLField(label: "Engine") {
+                Picker("", selection: $appState.transcriptionEngine) {
+                    ForEach(TranscriptionEngineKind.allCases) { kind in
+                        Text(kind.displayName).tag(kind)
+                            .disabled(kind == .apple && !TranscriptionEngineKind.isAppleAvailable)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 220)
+            }
+
+            if appState.transcriptionEngine == .apple {
+                VLField(label: "Language") {
+                    Picker("", selection: $appState.selectedLanguage) {
+                        if !Self.onDeviceLanguages.contains(where: { $0.0 == appState.selectedLanguage }) {
+                            Text(appState.selectedLanguage).tag(appState.selectedLanguage)
+                        }
+                        ForEach(Self.onDeviceLanguages, id: \.0) { code, name in
+                            Text(name).tag(code)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 220)
+                }
+                Text("Speech is transcribed on this Mac by Apple's dictation engine — no API key, and audio never leaves your Mac. The model downloads once if it isn't already installed.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.vlTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if !TranscriptionEngineKind.isAppleAvailable {
+                Text("On-device transcription needs macOS 26 or later.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.vlTextSecondary)
+            }
+        }
+    }
+
+    private var deepgramSection: some View {
         VLCard {
             VLCardHeader(
                 title: "Deepgram API",
@@ -844,7 +899,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .dictation:     return "Hotkey, feedback sound & microphone"
-        case .transcription: return "Deepgram speech-to-text engine"
+        case .transcription: return "Speech-to-text engine"
         case .aiPolish:      return "LLM cleanup applied after transcription"
         case .corrections:   return "Spelling, grammar, code-mix & translation"
         case .focusWords:    return "Exact spellings & spoken text expansions"

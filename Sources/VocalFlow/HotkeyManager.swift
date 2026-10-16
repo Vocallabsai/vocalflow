@@ -50,7 +50,7 @@ class HotkeyManager {
             // during the handshake isn't lost. Previously we delayed capture by
             // 150ms (to let the chime finish before muting), which dropped the
             // start of the user's speech.
-            self.appState.deepgramService.connect(
+            self.appState.transcriber.begin(
                 apiKey: self.appState.deepgramAPIKey,
                 model: self.appState.selectedModel,
                 language: self.appState.selectedLanguage,
@@ -60,7 +60,7 @@ class HotkeyManager {
                 try self.appState.audioEngine.startCapture(
                     deviceUID: self.appState.selectedAudioDeviceUID
                 ) { [weak self] buffer, format in
-                    self?.appState.deepgramService.sendAudioBuffer(buffer, format: format)
+                    self?.appState.transcriber.sendAudioBuffer(buffer, format: format)
                 }
             } catch {
                 self.handleCaptureFailure(error)
@@ -86,7 +86,7 @@ class HotkeyManager {
             guard case .recording = self.appState.recordingState else { return }
             self.appState.audioEngine.stopCapture()
             self.appState.audioMuter.unmute()
-            self.appState.deepgramService.cancel()
+            self.appState.transcriber.cancel()
             // Discard the in-flight press so the imminent hotkey-up doesn't try
             // to "stop" a session we just aborted.
             self.triggerKeyIsDown = false
@@ -96,7 +96,7 @@ class HotkeyManager {
 
     private func handleCaptureFailure(_ error: Error) {
         appState.audioMuter.unmute()
-        appState.deepgramService.cancel()
+        appState.transcriber.cancel()
         let message = "Microphone failed: \(error.localizedDescription)"
         appState.recordingState = .error(message)
         appState.reportError(message)
@@ -121,7 +121,7 @@ class HotkeyManager {
             // Play chime after unmuting so it goes through
             self.playFeedbackSound()
 
-            let finalTranscript = await self.appState.deepgramService.closeStream()
+            let finalTranscript = await self.appState.transcriber.closeStream()
             guard !finalTranscript.isEmpty else {
                 self.appState.recordingState = .idle
                 return

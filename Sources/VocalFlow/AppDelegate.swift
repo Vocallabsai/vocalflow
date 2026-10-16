@@ -26,7 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.hotkeyManager?.startListening()
         }
 
-        if WelcomeWindowController.shouldShow(deepgramKey: state.deepgramAPIKey) {
+        if state.needsDeepgramKey && WelcomeWindowController.shouldShow(deepgramKey: state.deepgramAPIKey) {
             // First run: the guided onboarding window requests Microphone + Accessibility
             // in context (not as cold prompts) and starts the hotkey once Accessibility is
             // granted — so a brand-new user sees a clear setup screen first, not bare alerts.

@@ -20,6 +20,7 @@ private enum DefaultsKey: String {
     case selectedAudioDeviceUID  = "selected_audio_device_uid"
     case customSystemPrompt      = "custom_system_prompt"
     case focusWords              = "focus_words"
+    case transcriptionEngine     = "transcription_engine"
 }
 
 private extension UserDefaults {
@@ -144,7 +145,10 @@ class AppState: ObservableObject {
     }
 
     @Published var selectedLanguage: String {
-        didSet { UserDefaults.standard.set(selectedLanguage, forKey: .selectedLanguage) }
+        didSet {
+            UserDefaults.standard.set(selectedLanguage, forKey: .selectedLanguage)
+            prepareTranscriber()
+        }
     }
 
     @Published var selectedHotkey: HotkeyOption {
@@ -235,8 +239,36 @@ class AppState: ObservableObject {
         }
     }
 
+    /// Which speech-to-text backend dictation uses. On-device (Apple) needs no key.
+    @Published var transcriptionEngine: TranscriptionEngineKind {
+        didSet {
+            UserDefaults.standard.set(transcriptionEngine.rawValue, forKey: .transcriptionEngine)
+            prepareTranscriber()
+        }
+    }
+
+    /// True when dictation can run without the user supplying a Deepgram key.
+    var needsDeepgramKey: Bool { transcriptionEngine == .deepgram }
+
     let audioEngine: AudioEngine = AudioEngine()
     let deepgramService: DeepgramService
+    /// `AppleSpeechService` when available (macOS 26+); typed loosely so AppState stays
+    /// usable on older systems.
+    private var appleSpeechService: TranscriptionEngine?
+
+    /// The backend the hotkey pipeline should drive right now.
+    var transcriber: TranscriptionEngine {
+        if transcriptionEngine == .apple, let apple = appleSpeechService { return apple }
+        return deepgramService
+    }
+
+    /// Warm up the on-device model (downloads it once if missing) so the first dictation is fast.
+    func prepareTranscriber() {
+        guard transcriptionEngine == .apple else { return }
+        if #available(macOS 26, *), let apple = appleSpeechService as? AppleSpeechService {
+            apple.prepare(language: selectedLanguage)
+        }
+    }
     let llmService: LLMService = LLMService()
     let textInjector: TextInjector = TextInjector()
     /// Watches for the user typing over a word VocalFlow just injected, and learns
@@ -291,10 +323,22 @@ class AppState: ObservableObject {
         )
         self.selectedAudioDeviceUID = UserDefaults.standard.string(forKey: .selectedAudioDeviceUID) ?? ""
 
+        let storedEngine = UserDefaults.standard.string(forKey: .transcriptionEngine) ?? ""
+        var engine = TranscriptionEngineKind(rawValue: storedEngine) ?? .defaultKind
+        if engine == .apple && !TranscriptionEngineKind.isAppleAvailable { engine = .deepgram }
+        self.transcriptionEngine = engine
+
         self.deepgramService.onPartialTranscript = { [weak self] text in
             // Service already hops to the main queue.
             self?.liveTranscript = text
         }
+        if #available(macOS 26, *) {
+            let apple = AppleSpeechService()
+            apple.onPartialTranscript = { [weak self] text in self?.liveTranscript = text }
+            apple.onError = { [weak self] message in self?.reportError(message) }
+            self.appleSpeechService = apple
+        }
+        prepareTranscriber()
 
         self.typeOverWatcher.onCorrection = { [weak self] corrected, original in
             self?.learnWord(corrected, original: original)
